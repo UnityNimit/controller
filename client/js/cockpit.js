@@ -1,74 +1,96 @@
 /**
- * Project Controller - Edge Node Client Engine
- * Integrates WebSockets, Motion Sensors, Multi-Touch Zones, Haptics & HUD.
+ * Project Controller - Pro Gamepad Client Engine
+ * High-performance virtual Xbox controller for Rocket League and PC Games.
  */
 
 import { SecurityClient } from "./security_client.js";
-import { HapticEngine, ShiftToneSynthesizer } from "./haptics.js";
-import { CockpitHUD } from "./hud.js";
+import { HapticEngine } from "./haptics.js";
 
-class CockpitController {
+class GamepadController {
   constructor() {
     this.security = new SecurityClient();
     this.haptics = new HapticEngine();
-    this.synth = new ShiftToneSynthesizer();
-    this.hud = null;
 
     // Network State
     this.ws = null;
     this.seq = 0;
     this.connected = false;
     this.playerSlot = 1;
-    this.playerColor = "#00ffcc";
 
-    // Sensor State
+    // Gyro & Sensor State
+    this.gyroEnabled = true;
     this.rawAngle = 0.0;
+    this.zeroOffset = 0.0;
     this.accel = { x: 0.0, y: 0.0, z: 9.8 };
 
-    // Input Control States
+    // Virtual Thumbstick State
+    this.stickX = 0;
+    this.stickY = 0;
+
+    // Trigger States [0.0, 1.0]
     this.throttle = 0.0;
     this.brake = 0.0;
+
+    // Button States
     this.buttons = {
-      SHIFT_UP: false,
-      SHIFT_DOWN: false,
-      HANDBRAKE: false,
-      HIGH_BEAM: false
+      A: false,
+      B: false,
+      X: false,
+      Y: false,
+      LB: false,
+      RB: false,
+      START: false,
+      BACK: false,
+      JUMP: false,
+      BOOST: false,
+      POWERSLIDE: false,
+      BALL_CAM: false
     };
 
     // Diagnostics
     this.rtt = 0;
-    this.packetRate = 0;
-    this.packetsSent = 0;
-    this.lastRateTime = performance.now();
+    this.speed = 0;
 
     this._initDom();
-    this._initTouchControls();
+    this._initControls();
   }
 
   _initDom() {
-    const canvas = document.getElementById("hud-canvas");
-    this.hud = new CockpitHUD(canvas);
-
     this.dom = {
-      statusIndicator: document.getElementById("status-dot"),
+      statusDot: document.getElementById("status-dot"),
       statusText: document.getElementById("link-status"),
       rttText: document.getElementById("rtt-val"),
-      hzText: document.getElementById("hz-val"),
-      slotText: document.getElementById("slot-val"),
-      brakeFill: document.getElementById("brake-fill"),
-      brakeVal: document.getElementById("brake-pct"),
-      throttleFill: document.getElementById("throttle-fill"),
-      throttleVal: document.getElementById("throttle-pct"),
+      speedText: document.getElementById("speed-val"),
+      gyroBadge: document.getElementById("gyro-badge"),
+      gyroBtn: document.getElementById("gyro-toggle-btn"),
+      fullscreenBtn: document.getElementById("fullscreen-btn"),
+      calibrateBtn: document.getElementById("calibrate-btn"),
       engageModal: document.getElementById("engage-modal"),
       engageBtn: document.getElementById("engage-btn"),
-      calibrateBtn: document.getElementById("calibrate-btn"),
-      fullscreenBtn: document.getElementById("fullscreen-btn")
+      ltFill: document.getElementById("lt-fill"),
+      rtFill: document.getElementById("rt-fill"),
+      stickZone: document.getElementById("stick-zone"),
+      stickKnob: document.getElementById("stick-knob")
     };
 
-    this.dom.engageBtn.addEventListener("click", () => this.engageCockpit());
+    this.dom.engageBtn.addEventListener("click", () => this.engage());
+    this.dom.fullscreenBtn.addEventListener("click", () => this.toggleFullscreen());
     this.dom.calibrateBtn.addEventListener("click", () => this.calibrateZero());
-    if (this.dom.fullscreenBtn) {
-      this.dom.fullscreenBtn.addEventListener("click", () => this.toggleFullscreen());
+    this.dom.gyroBtn.addEventListener("click", () => this.toggleGyro());
+  }
+
+  toggleGyro() {
+    this.gyroEnabled = !this.gyroEnabled;
+    this.haptics.triggerClick();
+    if (this.gyroEnabled) {
+      this.dom.gyroBtn.innerText = "GYRO STEER: ON";
+      this.dom.gyroBtn.classList.remove("active");
+      this.dom.gyroBadge.innerText = "TILT STEERING ACTIVE";
+      this.dom.gyroBadge.style.display = "block";
+    } else {
+      this.dom.gyroBtn.innerText = "GYRO STEER: OFF";
+      this.dom.gyroBtn.classList.add("active");
+      this.dom.gyroBadge.innerText = "THUMBSTICK STEERING";
     }
   }
 
@@ -95,55 +117,47 @@ class CockpitController {
         }
       }
     } catch (e) {
-      console.debug("Fullscreen error", e);
+      console.debug("Fullscreen toggle error", e);
     }
     window.scrollTo(0, 1);
   }
 
-  async engageCockpit() {
-    // 1. Enter Fullscreen Mode
+  async engage() {
+    // 1. Fullscreen request
     this.toggleFullscreen();
 
-    // 2. Initialize Web Audio Context
-    this.synth.initAudio();
-
-    // 3. Request Motion Sensor Permissions (required by iOS Safari)
+    // 2. iOS Motion permission request
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
       try {
         const perm = await DeviceOrientationEvent.requestPermission();
         if (perm !== "granted") {
-          console.warn("DeviceOrientation permission denied");
+          console.warn("Motion permission denied");
         }
       } catch (err) {
-        console.warn("DeviceOrientation permission error:", err);
+        console.warn("Motion permission error", err);
       }
     }
 
-    // 3. Request Wake Lock to prevent screen dimming
+    // 3. Screen WakeLock
     try {
       if ("wakeLock" in navigator) {
         await navigator.wakeLock.request("screen");
       }
-    } catch (err) {
-      console.debug("WakeLock unavailable", err);
-    }
+    } catch (e) {}
 
     // 4. Attach Motion Listeners
     this._attachMotionSensors();
 
-    // 5. Hide Modal & Connect WebSocket
+    // 5. Hide Modal & Connect
     this.dom.engageModal.style.display = "none";
-    this.connectWebSocket();
+    this.connect();
 
-    // 6. Start Render & Transmission Loops
-    this._startLoops();
+    // 6. Start high-frequency transmission loop
+    this._startLoop();
   }
 
   _attachMotionSensors() {
-    // Orientation: Steering from wrist tilt
     window.addEventListener("deviceorientation", (e) => {
-      // In landscape: beta represents tilt left/right
-      // Check screen orientation
       const orientation = window.orientation || (screen.orientation ? screen.orientation.angle : 0);
       let angle = 0;
       if (orientation === 90) {
@@ -151,14 +165,11 @@ class CockpitController {
       } else if (orientation === -90) {
         angle = e.beta;
       } else {
-        // Fallback for non-standard rotation: use gamma
         angle = e.gamma || 0;
       }
       this.rawAngle = angle;
-      this.hud.updateSteering(angle);
     }, { passive: true });
 
-    // Motion: Accelerometer for Handbrake Jerk
     window.addEventListener("devicemotion", (e) => {
       if (e.accelerationIncludingGravity) {
         this.accel = {
@@ -168,113 +179,152 @@ class CockpitController {
         };
       }
     }, { passive: true });
-
-    // Ambient Light Sensor (Thumb Flasher trigger)
-    if ("AmbientLightSensor" in window) {
-      try {
-        const sensor = new AmbientLightSensor();
-        sensor.addEventListener("reading", () => {
-          if (sensor.illuminance < 8) {
-            this.buttons.HIGH_BEAM = true;
-          } else {
-            this.buttons.HIGH_BEAM = false;
-          }
-        });
-        sensor.start();
-      } catch (err) {
-        console.debug("AmbientLightSensor unavailable", err);
-      }
-    }
   }
 
-  _initTouchControls() {
-    // Left Trigger: Brake Zone
-    const brakeZone = document.getElementById("brake-zone");
-    const updateBrake = (e) => {
-      const rect = brakeZone.getBoundingClientRect();
+  _initControls() {
+    // 1. Left Trigger (LT: Brake / Reverse)
+    const ltZone = document.getElementById("lt-zone");
+    const updateLT = (e) => {
+      const rect = ltZone.getBoundingClientRect();
       const touch = e.touches ? e.touches[0] : e;
       const y = touch.clientY - rect.top;
       const norm = Math.max(0.0, Math.min(1.0, 1.0 - (y / rect.height)));
-      this.brake = norm;
-      this.dom.brakeFill.style.height = `${(norm * 100).toFixed(0)}%`;
-      this.dom.brakeVal.innerText = `${(norm * 100).toFixed(0)}%`;
+      // If tapped top half, snap to full brake
+      const val = norm > 0.3 ? Math.min(1.0, norm * 1.3) : norm;
+      this.brake = val;
+      this.dom.ltFill.style.height = `${(val * 100).toFixed(0)}%`;
     };
-
-    brakeZone.addEventListener("pointerdown", (e) => {
-      brakeZone.setPointerCapture(e.pointerId);
-      updateBrake(e);
+    ltZone.addEventListener("pointerdown", (e) => {
+      try { ltZone.setPointerCapture(e.pointerId); } catch (_) {}
+      this.haptics.triggerClick();
+      updateLT(e);
     });
-    brakeZone.addEventListener("pointermove", (e) => {
-      if (e.buttons > 0) updateBrake(e);
+    ltZone.addEventListener("pointermove", (e) => {
+      if (e.buttons > 0) updateLT(e);
     });
-    const releaseBrake = () => {
+    const releaseLT = () => {
       this.brake = 0.0;
-      this.dom.brakeFill.style.height = "0%";
-      this.dom.brakeVal.innerText = "0%";
+      this.dom.ltFill.style.height = "0%";
     };
-    brakeZone.addEventListener("pointerup", releaseBrake);
-    brakeZone.addEventListener("pointercancel", releaseBrake);
+    ltZone.addEventListener("pointerup", releaseLT);
+    ltZone.addEventListener("pointercancel", releaseLT);
 
-    // Right Trigger: Throttle Zone
-    const throttleZone = document.getElementById("throttle-zone");
-    const updateThrottle = (e) => {
-      const rect = throttleZone.getBoundingClientRect();
+    // 2. Right Trigger (RT: Drive / Accelerate)
+    const rtZone = document.getElementById("rt-zone");
+    const updateRT = (e) => {
+      const rect = rtZone.getBoundingClientRect();
       const touch = e.touches ? e.touches[0] : e;
       const y = touch.clientY - rect.top;
       const norm = Math.max(0.0, Math.min(1.0, 1.0 - (y / rect.height)));
-      this.throttle = norm;
-      this.dom.throttleFill.style.height = `${(norm * 100).toFixed(0)}%`;
-      this.dom.throttleVal.innerText = `${(norm * 100).toFixed(0)}%`;
+      const val = norm > 0.3 ? Math.min(1.0, norm * 1.3) : norm;
+      this.throttle = val;
+      this.dom.rtFill.style.height = `${(val * 100).toFixed(0)}%`;
     };
-
-    throttleZone.addEventListener("pointerdown", (e) => {
-      throttleZone.setPointerCapture(e.pointerId);
-      updateThrottle(e);
+    rtZone.addEventListener("pointerdown", (e) => {
+      try { rtZone.setPointerCapture(e.pointerId); } catch (_) {}
+      this.haptics.triggerClick();
+      updateRT(e);
     });
-    throttleZone.addEventListener("pointermove", (e) => {
-      if (e.buttons > 0) updateThrottle(e);
+    rtZone.addEventListener("pointermove", (e) => {
+      if (e.buttons > 0) updateRT(e);
     });
-    const releaseThrottle = () => {
+    const releaseRT = () => {
       this.throttle = 0.0;
-      this.dom.throttleFill.style.height = "0%";
-      this.dom.throttleVal.innerText = "0%";
+      this.dom.rtFill.style.height = "0%";
     };
-    throttleZone.addEventListener("pointerup", releaseThrottle);
-    throttleZone.addEventListener("pointercancel", releaseThrottle);
+    rtZone.addEventListener("pointerup", releaseRT);
+    rtZone.addEventListener("pointercancel", releaseRT);
 
-    // Digital Action Buttons with multi-touch pointer capture
-    const bindBtn = (id, buttonKey, aliases = []) => {
+    // 3. Virtual Thumbstick (Left Stick)
+    const stickZone = this.dom.stickZone;
+    const stickKnob = this.dom.stickKnob;
+    let stickActive = false;
+
+    const handleStick = (e) => {
+      const rect = stickZone.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const touch = e.touches ? e.touches[0] : e;
+      
+      let dx = touch.clientX - cx;
+      let dy = touch.clientY - cy;
+      const maxRadius = (rect.width / 2) - 15;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+      // Map to 16-bit signed integer [-32768, 32767]
+      // Invert Y: Up on joystick is negative Y on screen, positive Y on thumbstick
+      this.stickX = Math.round((dx / maxRadius) * 32767);
+      this.stickY = Math.round((-dy / maxRadius) * 32767);
+    };
+
+    stickZone.addEventListener("pointerdown", (e) => {
+      stickActive = true;
+      try { stickZone.setPointerCapture(e.pointerId); } catch (_) {}
+      this.haptics.triggerClick();
+      handleStick(e);
+    });
+    stickZone.addEventListener("pointermove", (e) => {
+      if (stickActive) handleStick(e);
+    });
+    const releaseStick = () => {
+      stickActive = false;
+      stickKnob.style.transform = "translate(0px, 0px)";
+      this.stickX = 0;
+      this.stickY = 0;
+    };
+    stickZone.addEventListener("pointerup", releaseStick);
+    stickZone.addEventListener("pointercancel", releaseStick);
+
+    // 4. Digital Buttons with Multi-Touch Pointer Capture
+    const bindBtn = (id, primaryKey, aliases = []) => {
       const el = document.getElementById(id);
       if (!el) return;
+
       const press = (e) => {
         try {
           if (e.pointerId) el.setPointerCapture(e.pointerId);
         } catch (_) {}
-        this.buttons[buttonKey] = true;
+        this.buttons[primaryKey] = true;
         for (const a of aliases) this.buttons[a] = true;
         el.classList.add("active");
         this.haptics.triggerClick();
       };
+
       const release = (e) => {
-        this.buttons[buttonKey] = false;
+        this.buttons[primaryKey] = false;
         for (const a of aliases) this.buttons[a] = false;
         el.classList.remove("active");
       };
+
       el.addEventListener("pointerdown", press);
       el.addEventListener("pointerup", release);
       el.addEventListener("pointercancel", release);
       el.addEventListener("pointerleave", release);
     };
 
-    // Primary Game Controls (Rocket League & Racing)
-    bindBtn("btn-jump", "JUMP", ["A"]);
-    bindBtn("btn-boost", "BOOST", ["B"]);
-    bindBtn("btn-slide", "POWERSLIDE", ["X", "HANDBRAKE"]);
-    bindBtn("btn-cam", "BALL_CAM", ["Y"]);
+    // ABXY Diamond Cluster
+    bindBtn("btn-a", "A", ["JUMP"]);
+    bindBtn("btn-b", "B", ["BOOST"]);
+    bindBtn("btn-x", "X", ["POWERSLIDE", "HANDBRAKE"]);
+    bindBtn("btn-y", "Y", ["BALL_CAM"]);
+
+    // Bumpers & Menu
+    bindBtn("btn-lb", "LB");
+    bindBtn("btn-rb", "RB");
+    bindBtn("btn-start", "START");
+    bindBtn("btn-back", "BACK");
   }
 
   calibrateZero() {
     this.haptics.triggerClick();
+    this.zeroOffset = this.rawAngle;
     if (this.ws && this.connected) {
       this.ws.send(JSON.stringify({
         type: "CALIBRATE",
@@ -283,7 +333,7 @@ class CockpitController {
     }
   }
 
-  connectWebSocket() {
+  connect() {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
     const url = `${proto}//${host}/ws`;
@@ -291,38 +341,32 @@ class CockpitController {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
-      this.dom.statusIndicator.classList.add("online");
-      this.dom.statusText.innerText = "CONNECTED";
+      this.dom.statusDot.classList.add("online");
+      this.dom.statusText.innerText = "ONLINE";
+      this.dom.statusText.style.color = "var(--accent-a)";
     };
 
     this.ws.onmessage = async (event) => {
       const msg = JSON.parse(event.data);
 
       if (msg.type === "AUTH_CHALLENGE") {
-        // Solve HMAC-SHA256 Challenge
         const authResponse = await this.security.solveChallenge(msg.nonce, msg.timestamp);
         this.ws.send(JSON.stringify(authResponse));
       } else if (msg.type === "AUTH_SUCCESS") {
         this.connected = true;
         this.playerSlot = msg.player_slot;
-        this.playerColor = msg.player_color;
-        this.dom.slotText.innerText = `P${msg.player_slot}`;
-        this.dom.slotText.style.color = msg.player_color;
-        this.hud.setPlayerSlot(msg.player_slot, msg.player_color);
       } else if (msg.type === "TELEMETRY") {
-        // Feed live telemetry into HUD
-        this.hud.updateTelemetry(msg.data);
-
-        // Process Closed-Loop Haptics & Shift Tone
+        // Update speed readout
+        if (msg.data && msg.data.speed_kmh !== undefined) {
+          this.speed = Math.round(msg.data.speed_kmh);
+          this.dom.speedText.innerText = `${this.speed}`;
+        }
+        // Process Haptics (rumble on collision/slip)
         if (msg.haptics) {
           if (msg.haptics.impact_spike) {
             this.haptics.triggerImpact();
           } else if (msg.haptics.slip_rumble) {
             this.haptics.triggerSlip();
-          }
-          if (msg.haptics.redline_alert) {
-            this.haptics.triggerRedline();
-            this.synth.beep(1800, 0.05);
           }
         }
       } else if (msg.type === "PONG") {
@@ -334,32 +378,37 @@ class CockpitController {
 
     this.ws.onclose = () => {
       this.connected = false;
-      this.dom.statusIndicator.classList.remove("online");
+      this.dom.statusDot.classList.remove("online");
       this.dom.statusText.innerText = "OFFLINE";
-      // Auto reconnect after 1.5 seconds
-      setTimeout(() => this.connectWebSocket(), 1500);
+      this.dom.statusText.style.color = "#888";
+      setTimeout(() => this.connect(), 1500);
     };
   }
 
-  _startLoops() {
-    // 1. 60 FPS HTML5 Canvas HUD Render Loop
-    const renderLoop = () => {
-      this.hud.render();
-      requestAnimationFrame(renderLoop);
-    };
-    requestAnimationFrame(renderLoop);
+  _startLoop() {
+    let lastPing = performance.now();
+    const intervalMs = 1000 / 60;
 
-    // 2. 60 Hz Teleoperation Transmission Loop
-    const sendIntervalMs = 1000 / 60;
     setInterval(() => {
       if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
       this.seq++;
+      const now = performance.now();
+
+      // Steering determination:
+      // If Gyro enabled: use physical wrist angle
+      // If Gyro disabled: use virtual thumbstick X
+      const effectiveAngle = this.gyroEnabled ? (this.rawAngle - this.zeroOffset) : 0.0;
+      const effectiveStickX = this.gyroEnabled ? 0 : this.stickX;
+
       const packet = {
         type: "INPUT",
         seq: this.seq,
-        ts: performance.now(),
-        angle: this.rawAngle,
+        ts: now,
+        gyro_enabled: this.gyroEnabled,
+        angle: effectiveAngle,
+        stick_x: effectiveStickX,
+        stick_y: this.stickY,
         throttle: this.throttle,
         brake: this.brake,
         accel: this.accel,
@@ -367,24 +416,16 @@ class CockpitController {
       };
 
       this.ws.send(JSON.stringify(packet));
-      this.packetsSent++;
 
-      // Update transmission frequency metric every 1 second
-      const now = performance.now();
-      if (now - this.lastRateTime >= 1000) {
-        this.packetRate = this.packetsSent;
-        this.packetsSent = 0;
-        this.lastRateTime = now;
-        this.dom.hzText.innerText = `${this.packetRate}Hz`;
-
-        // Send ping for RTT calculation
+      // Periodic ping every 1 second
+      if (now - lastPing >= 1000) {
+        lastPing = now;
         this.ws.send(JSON.stringify({ type: "PING", ts: now }));
       }
-    }, sendIntervalMs);
+    }, intervalMs);
   }
 }
 
-// Instantiate on DOM load
 window.addEventListener("DOMContentLoaded", () => {
-  new CockpitController();
+  new GamepadController();
 });

@@ -84,7 +84,13 @@ class ViGEmXInputGamepad(AbstractGamepad):
             "RB": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
             "START": vg.XUSB_BUTTON.XUSB_GAMEPAD_START,
             "BACK": vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK,
-            # Rocket League & Racing Aliases
+            "LS": vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB,
+            "RS": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB,
+            "DPAD_UP": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP,
+            "DPAD_DOWN": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN,
+            "DPAD_LEFT": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT,
+            "DPAD_RIGHT": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT,
+            # Aliases
             "JUMP": vg.XUSB_BUTTON.XUSB_GAMEPAD_A,
             "BOOST": vg.XUSB_BUTTON.XUSB_GAMEPAD_B,
             "POWERSLIDE": vg.XUSB_BUTTON.XUSB_GAMEPAD_X,
@@ -97,9 +103,13 @@ class ViGEmXInputGamepad(AbstractGamepad):
         self.reset()
         logger.info(f"Initialized native ViGEmBus Virtual Xbox 360 controller for Player {player_index + 1}")
 
+    def set_stick(self, x_val: int, y_val: int = 0) -> None:
+        clamped_x = max(-32768, min(32767, int(x_val)))
+        clamped_y = max(-32768, min(32767, int(y_val)))
+        self.gamepad.left_joystick(x_value=clamped_x, y_value=clamped_y)
+
     def set_steering(self, val: int) -> None:
-        clamped = max(-32768, min(32767, int(val)))
-        self.gamepad.left_joystick(x_value=clamped, y_value=0)
+        self.set_stick(val, 0)
 
     def set_throttle(self, val: int) -> None:
         clamped = max(0, min(255, int(val)))
@@ -238,6 +248,7 @@ class MockGamepad(AbstractGamepad):
     def __init__(self, player_index: int = 0):
         self.player_index = player_index
         self.steering: int = 0
+        self.stick_y: int = 0
         self.throttle: int = 0
         self.brake: int = 0
         self.buttons: Dict[str, bool] = {}
@@ -245,6 +256,10 @@ class MockGamepad(AbstractGamepad):
 
     def set_steering(self, val: int) -> None:
         self.steering = int(val)
+
+    def set_stick(self, x_val: int, y_val: int = 0) -> None:
+        self.steering = int(x_val)
+        self.stick_y = int(y_val)
 
     def set_throttle(self, val: int) -> None:
         self.throttle = int(val)
@@ -345,8 +360,13 @@ class InputManager:
             return False
 
         ctrl = self.controllers[slot]
-        if "stick_x" in control_state:
-            ctrl.set_steering(control_state["stick_x"])
+        if "stick_x" in control_state or "stick_y" in control_state:
+            sx = control_state.get("stick_x", 0)
+            sy = control_state.get("stick_y", 0)
+            if hasattr(ctrl, "set_stick"):
+                ctrl.set_stick(sx, sy)
+            else:
+                ctrl.set_steering(sx)
         if "throttle" in control_state:
             ctrl.set_throttle(control_state["throttle"])
         if "brake" in control_state:

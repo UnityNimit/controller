@@ -6,81 +6,111 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>PROJECT CONTROLLER // DIGITAL COCKPIT</title>
+  <title>PROJECT CONTROLLER // PRO GAMEPAD</title>
   <link rel="stylesheet" href="css/cockpit.css">
 </head>
 <body>
 
-  <div id="cockpit-container">
-    <!-- Top Telemetry & Health Ribbon -->
-    <header id="telemetry-ribbon">
-      <div class="ribbon-group">
-        <div class="ribbon-item">
-          <span class="status-indicator" id="status-dot"></span>
-          <span class="ribbon-val" id="link-status">OFFLINE</span>
-        </div>
-        <div class="ribbon-item">
-          <span class="ribbon-label">SLOT:</span>
-          <span class="ribbon-val" id="slot-val">P1</span>
-        </div>
-        <div class="ribbon-item">
-          <span class="ribbon-label">RTT:</span>
-          <span class="ribbon-val" id="rtt-val">--</span>
-        </div>
+  <div id="controller-app">
+    <!-- Top System Bar -->
+    <header id="top-bar">
+      <div class="top-group">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="link-status" style="color: #888;">CONNECTING</span>
+        <span style="color: #444;">|</span>
+        <span id="rtt-val" style="color: #888;">-- ms</span>
       </div>
 
-      <div class="ribbon-group">
-        <button class="ribbon-btn" id="calibrate-btn">
-          CALIBRATE ZERO
+      <div class="top-group">
+        <button class="bar-btn" id="gyro-toggle-btn">
+          GYRO STEER: ON
         </button>
-        <button class="ribbon-btn" id="fullscreen-btn">
+        <button class="bar-btn" id="calibrate-btn">
+          ZERO
+        </button>
+        <button class="bar-btn" id="fullscreen-btn">
           ⛶ FULLSCREEN
         </button>
       </div>
     </header>
 
-    <!-- Main Cockpit Flight Deck -->
-    <main id="flight-deck">
-      <!-- Left Control Wing: Brake/Reverse & Secondary Actions -->
-      <section class="control-wing left">
-        <div class="slider-container" id="brake-zone">
-          <div class="slider-fill" id="brake-fill"></div>
-          <span class="slider-label">REV / BRAKE // LT</span>
-          <span class="slider-value" id="brake-pct">0%</span>
+    <!-- Main Gamepad Deck -->
+    <main id="controller-deck">
+      <!-- Left Wing: LT Trigger, LB Bumper, Virtual Thumbstick -->
+      <section class="gamepad-wing left">
+        <div class="shoulder-row">
+          <div class="trigger-box" id="lt-zone">
+            <div class="trigger-fill" id="lt-fill"></div>
+            <span class="trigger-title">LT</span>
+            <span class="trigger-sub">BRAKE / REV</span>
+          </div>
+          <button class="bumper-btn" id="btn-lb">
+            LB
+            <span style="font-size: 7px; color: #777;">ROLL L</span>
+          </button>
         </div>
-        <div class="button-row">
-          <button class="ctrl-btn" id="btn-slide">
-            SLIDE
-            <span class="btn-sub">POWERSLIDE [X]</span>
-          </button>
-          <button class="ctrl-btn" id="btn-cam">
-            CAM
-            <span class="btn-sub">BALL CAM [Y]</span>
-          </button>
+
+        <div class="wing-body">
+          <div id="stick-zone">
+            <div id="stick-crosshair"></div>
+            <div id="stick-knob">LS</div>
+          </div>
         </div>
       </section>
 
-      <!-- Center Deck: 60 FPS HTML5 Canvas HUD -->
-      <section id="center-deck">
-        <canvas id="hud-canvas"></canvas>
+      <!-- Center Deck: Start, Back, Speedometer -->
+      <section id="center-column">
+        <div class="center-menu-row">
+          <button class="menu-pill-btn" id="btn-back">BACK</button>
+          <button class="menu-pill-btn" id="btn-start">START</button>
+        </div>
+
+        <div class="center-display">
+          <div class="speed-readout" id="speed-val">0</div>
+          <div class="speed-unit">KM/H</div>
+          <div class="gyro-steering-badge" id="gyro-badge">TILT STEERING ACTIVE</div>
+        </div>
+
+        <div style="height: 20px;"></div>
       </section>
 
-      <!-- Right Control Wing: Gas/Throttle & Primary Action Buttons (Jump / Boost) -->
-      <section class="control-wing right">
-        <div class="slider-container" id="throttle-zone">
-          <div class="slider-fill" id="throttle-fill"></div>
-          <span class="slider-label">DRIVE / GAS // RT</span>
-          <span class="slider-value" id="throttle-pct">0%</span>
+      <!-- Right Wing: RT Trigger, RB Bumper, ABXY Action Cluster -->
+      <section class="gamepad-wing right">
+        <div class="shoulder-row">
+          <button class="bumper-btn" id="btn-rb">
+            RB
+            <span style="font-size: 7px; color: #777;">ROLL R</span>
+          </button>
+          <div class="trigger-box" id="rt-zone">
+            <div class="trigger-fill" id="rt-fill"></div>
+            <span class="trigger-title">RT</span>
+            <span class="trigger-sub">DRIVE / GAS</span>
+          </div>
         </div>
-        <div class="button-row">
-          <button class="ctrl-btn btn-jump" id="btn-jump">
-            JUMP
-            <span class="btn-sub">PRIMARY [A]</span>
-          </button>
-          <button class="ctrl-btn btn-boost" id="btn-boost">
-            BOOST
-            <span class="btn-sub">ROCKET [B]</span>
-          </button>
+
+        <div class="wing-body">
+          <div id="abxy-cluster">
+            <!-- Y: Top (Ball Cam) -->
+            <button class="action-btn" id="btn-y">
+              <span class="btn-label" style="color: var(--accent-y);">Y</span>
+              <span class="btn-desc">CAM</span>
+            </button>
+            <!-- X: Left (Powerslide / Air Roll) -->
+            <button class="action-btn" id="btn-x">
+              <span class="btn-label" style="color: var(--accent-x);">X</span>
+              <span class="btn-desc">SLIDE</span>
+            </button>
+            <!-- B: Right (Rocket Boost) -->
+            <button class="action-btn" id="btn-b">
+              <span class="btn-label" style="color: var(--accent-b);">B</span>
+              <span class="btn-desc">BOOST</span>
+            </button>
+            <!-- A: Bottom (Jump) -->
+            <button class="action-btn" id="btn-a">
+              <span class="btn-label" style="color: var(--accent-a);">A</span>
+              <span class="btn-desc">JUMP</span>
+            </button>
+          </div>
         </div>
       </section>
     </main>
@@ -88,23 +118,23 @@
 
   <!-- Portrait Orientation Warning -->
   <div id="orientation-warning">
-    <div style="font-size: 20px; font-weight: bold; margin-bottom: 6px;">ROTATE PHONE TO LANDSCAPE</div>
-    <div style="color: #888888; font-size: 12px; line-height: 1.4;">
-      Tilt steering and dual-thumb game controls require horizontal orientation.
+    <div style="font-size: 22px; font-weight: bold; margin-bottom: 8px;">ROTATE TO LANDSCAPE</div>
+    <div style="color: #888; font-size: 12px; line-height: 1.5; max-width: 280px;">
+      Hold your phone horizontally with both thumbs to use as a full Xbox Game Controller.
     </div>
   </div>
 
-  <!-- Engagement & Permissions Modal -->
+  <!-- Start Modal -->
   <div class="modal-backdrop" id="engage-modal">
     <div class="modal-card">
-      <div class="modal-header">PROJECT CONTROLLER // SYSTEM INITIALIZATION</div>
+      <div class="modal-header">PROJECT CONTROLLER // READY</div>
       <div class="modal-body">
-        Digital Cockpit & Virtual Gamepad for PC Games.<br><br>
-        • Left Thumb: Reverse/Brake (LT), Powerslide (X), Ball Cam (Y)<br>
-        • Right Thumb: Drive/Gas (RT), Jump (A), Boost (B)<br>
-        • Tilt Phone: Precision Steering (Left Thumbstick)
+        Full Xbox 360 Controller for Rocket League & PC Games.<br><br>
+        • <b>Steer</b>: Tilt phone like a steering wheel or use Left Stick<br>
+        • <b>Drive / Reverse</b>: RT (Drive), LT (Reverse)<br>
+        • <b>Action</b>: A (Jump), B (Boost), X (Slide), Y (Ball Cam)
       </div>
-      <button class="primary-action-btn" id="engage-btn">ENGAGE COCKPIT & FULLSCREEN</button>
+      <button class="primary-btn" id="engage-btn">ENGAGE CONTROLLER</button>
     </div>
   </div>
 

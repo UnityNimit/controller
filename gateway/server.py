@@ -315,9 +315,17 @@ class ControllerGatewayServer:
 
                     pipeline = self.pipelines[client_id]
 
-                    # Process Steering
-                    raw_angle = float(data.get("angle", 0.0))
-                    stick_x, filtered_angle, _ = pipeline.process_steering(raw_angle)
+                    # Process Steering & Thumbstick
+                    if data.get("gyro_enabled", True) and "angle" in data:
+                        raw_angle = float(data.get("angle", 0.0))
+                        stick_x, filtered_angle, _ = pipeline.process_steering(raw_angle)
+                    else:
+                        raw_angle = 0.0
+                        filtered_angle = 0.0
+                        stick_x = int(data.get("stick_x", 0))
+
+                    # Thumbstick Y (pitch / aerials)
+                    stick_y = int(data.get("stick_y", 0))
 
                     # Process Triggers (Gas & Brake)
                     raw_th = float(data.get("throttle", 0.0))
@@ -339,6 +347,7 @@ class ControllerGatewayServer:
                     # Dispatch to OS Virtual Gamepad
                     control_state = {
                         "stick_x": stick_x,
+                        "stick_y": stick_y,
                         "throttle": th_byte,
                         "brake": br_byte,
                         "buttons": buttons

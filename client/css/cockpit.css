@@ -1,16 +1,18 @@
-/* Project Controller - Ultra-Minimal Industrial Cockpit Styling */
+/* Project Controller - Pro Gamepad & Teleoperation Controller */
 :root {
-  --bg-primary: #040404;
-  --bg-surface: #0e0e0e;
-  --bg-active: #1c1c1c;
-  --border-hairline: #202020;
-  --border-focus: #444444;
-  --text-primary: #f0f0f0;
+  --bg-primary: #070707;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+  --bg-active: #282828;
+  --border-hairline: #222222;
+  --border-focus: #3a3a3a;
+  --text-primary: #f2f2f2;
   --text-dim: #777777;
+  --accent-a: #00ff88;  /* A: Jump (Green) */
+  --accent-b: #ff3344;  /* B: Boost (Red) */
+  --accent-x: #2f80ed;  /* X: Powerslide (Blue) */
+  --accent-y: #ffbb00;  /* Y: Ball Cam (Amber) */
   --accent-cyan: #00ffcc;
-  --accent-amber: #ffaa00;
-  --accent-crimson: #ff3344;
-  --accent-blue: #2f80ed;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
 }
 
@@ -36,179 +38,159 @@ html, body {
   font-size: 11px;
 }
 
-#cockpit-container {
+#controller-app {
   display: flex;
   flex-direction: column;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   position: relative;
-  padding-left: max(4px, env(safe-area-inset-left));
-  padding-right: max(4px, env(safe-area-inset-right));
-  padding-bottom: max(2px, env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Compact Top Telemetry Ribbon (28px) */
-#telemetry-ribbon {
+/* Minimal Header Bar (30px) */
+#top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 28px;
-  min-height: 28px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border-hairline);
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
   background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-hairline);
   font-size: 10px;
-  letter-spacing: 0.05em;
-  z-index: 10;
+  z-index: 20;
 }
 
-.ribbon-group {
+.top-group {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 8px;
 }
 
-.ribbon-item {
-  display: flex;
-  gap: 4px;
-}
-
-.ribbon-label {
-  color: var(--text-dim);
-}
-
-.ribbon-val {
-  color: var(--text-primary);
-  font-weight: bold;
-}
-
-.status-indicator {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+.status-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background-color: #333333;
-  margin-right: 4px;
+  background-color: #444;
 }
 
-.status-indicator.online {
-  background-color: var(--accent-cyan);
-  box-shadow: 0 0 6px var(--accent-cyan);
+.status-dot.online {
+  background-color: var(--accent-a);
+  box-shadow: 0 0 6px var(--accent-a);
 }
 
-.ribbon-btn {
-  background: #181818;
+.bar-btn {
+  background: var(--bg-elevated);
   border: 1px solid var(--border-hairline);
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 9px;
+  font-weight: bold;
   padding: 3px 8px;
+  border-radius: 3px;
   cursor: pointer;
   letter-spacing: 0.05em;
-  height: 20px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.ribbon-btn:active, .ribbon-btn.active {
-  background: #333333;
+.bar-btn:active, .bar-btn.active {
+  background: #333;
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }
 
-/* Main Flight Cockpit Deck: Left Wing | Center HUD | Right Wing */
-#flight-deck {
+/* Controller Deck: Left | Center | Right */
+#controller-deck {
   display: grid;
-  grid-template-columns: 26% 48% 26%;
+  grid-template-columns: 38% 24% 38%;
   flex: 1;
   min-height: 0;
-  height: calc(100dvh - 28px);
+  height: calc(100dvh - 30px);
   position: relative;
   overflow: hidden;
 }
 
 /* Control Wings (Left & Right) */
-.control-wing {
+.gamepad-wing {
   display: flex;
   flex-direction: column;
-  padding: 6px;
-  gap: 6px;
-  background-color: var(--bg-primary);
-  border-right: 1px solid var(--border-hairline);
+  padding: 8px 10px;
+  gap: 8px;
   min-height: 0;
   overflow: hidden;
 }
 
-.control-wing.right {
-  border-right: none;
+.gamepad-wing.left {
+  border-right: 1px solid var(--border-hairline);
+}
+
+.gamepad-wing.right {
   border-left: 1px solid var(--border-hairline);
 }
 
-/* Analog Touch Sliders (Gas & Brake) */
-.slider-container {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hairline);
-  position: relative;
-  overflow: hidden;
-  touch-action: none;
-}
-
-.slider-fill {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 0%;
-  transition: height 0.03s linear;
-  pointer-events: none;
-}
-
-#brake-fill {
-  background-color: rgba(255, 51, 68, 0.35);
-  border-top: 2px solid var(--accent-crimson);
-}
-
-#throttle-fill {
-  background-color: rgba(0, 255, 204, 0.35);
-  border-top: 2px solid var(--accent-cyan);
-}
-
-.slider-label {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.slider-value {
-  position: absolute;
-  bottom: 6px;
-  right: 8px;
-  font-size: 16px;
-  font-weight: bold;
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* Tactical Action Buttons Row */
-.button-row {
+/* Shoulder Trigger Rows */
+.shoulder-row {
   display: flex;
   gap: 6px;
   height: 48px;
   min-height: 48px;
 }
 
-.ctrl-btn {
+.trigger-box {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.trigger-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  pointer-events: none;
+  transition: height 0.04s linear;
+}
+
+#lt-fill {
+  background-color: rgba(255, 51, 68, 0.35);
+  border-top: 2px solid var(--accent-b);
+}
+
+#rt-fill {
+  background-color: rgba(0, 255, 136, 0.35);
+  border-top: 2px solid var(--accent-a);
+}
+
+.trigger-title {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.trigger-sub {
+  font-size: 8px;
+  color: var(--text-dim);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.bumper-btn {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -216,116 +198,247 @@ html, body {
   align-items: center;
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
+  border-radius: 6px;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: bold;
-  letter-spacing: 0.06em;
   cursor: pointer;
   touch-action: none;
-  transition: background-color 0.05s, border-color 0.05s, transform 0.05s;
+  transition: background-color 0.05s, border-color 0.05s, transform 0.04s;
 }
 
-.ctrl-btn:active, .ctrl-btn.active {
-  background: #252525;
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-  transform: scale(0.97);
+.bumper-btn:active, .bumper-btn.active {
+  background: var(--bg-active);
+  border-color: #fff;
+  transform: scale(0.96);
 }
 
-.ctrl-btn.btn-jump:active, .ctrl-btn.btn-jump.active {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+/* Wing Lower Action Zones */
+.wing-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
-.ctrl-btn.btn-boost {
-  border-color: #443311;
+/* Left Side: Virtual Thumbstick Zone */
+#stick-zone {
+  width: 140px;
+  height: 140px;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-hairline);
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
 }
 
-.ctrl-btn.btn-boost:active, .ctrl-btn.btn-boost.active {
-  background: #332200;
-  border-color: var(--accent-amber);
-  color: var(--accent-amber);
+#stick-knob {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #202020;
+  border: 2px solid #555;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: bold;
+  color: #aaa;
 }
 
-.btn-sub {
-  font-size: 8px;
+#stick-crosshair {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+#stick-crosshair::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: #222;
+}
+
+#stick-crosshair::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  background: #222;
+}
+
+/* Right Side: ABXY Diamond Action Cluster */
+#abxy-cluster {
+  width: 160px;
+  height: 160px;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  position: relative;
+}
+
+.action-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-hairline);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.04s, background-color 0.05s, border-color 0.05s;
+}
+
+.action-btn:active, .action-btn.active {
+  transform: scale(0.92);
+}
+
+.btn-label {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.btn-desc {
+  font-size: 7px;
   font-weight: normal;
   color: var(--text-dim);
   margin-top: 1px;
+  text-transform: uppercase;
 }
 
-/* Center HUD Canvas */
-#center-deck {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  background: #020202;
-  min-height: 0;
-  overflow: hidden;
+/* Diamond Button Coordinates */
+#btn-a {
+  bottom: 0;
+  left: 54px;
+  border-color: #004422;
+}
+#btn-a:active, #btn-a.active {
+  background: #003318;
+  border-color: var(--accent-a);
+  color: var(--accent-a);
 }
 
-#hud-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
+#btn-b {
+  right: 0;
+  top: 54px;
+  border-color: #441118;
+}
+#btn-b:active, #btn-b.active {
+  background: #33080e;
+  border-color: var(--accent-b);
+  color: var(--accent-b);
 }
 
-/* Overlay & Modals */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
+#btn-x {
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.94);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
+  top: 54px;
+  border-color: #112244;
+}
+#btn-x:active, #btn-x.active {
+  background: #09152b;
+  border-color: var(--accent-x);
+  color: var(--accent-x);
 }
 
-.modal-card {
-  width: 90%;
-  max-width: 440px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-focus);
-  padding: 20px;
+#btn-y {
+  top: 0;
+  left: 54px;
+  border-color: #443300;
+}
+#btn-y:active, #btn-y.active {
+  background: #2b2000;
+  border-color: var(--accent-y);
+  color: var(--accent-y);
+}
+
+/* Center Column: Status, Speed, Nav */
+#center-column {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 6px;
+  background: #030303;
 }
 
-.modal-header {
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 0.1em;
-  border-bottom: 1px solid var(--border-hairline);
-  padding-bottom: 6px;
+.center-menu-row {
+  display: flex;
+  gap: 8px;
 }
 
-.modal-body {
-  font-size: 11px;
+.menu-pill-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
   color: var(--text-dim);
-  line-height: 1.5;
-}
-
-.primary-action-btn {
-  background: #ffffff;
-  color: #000000;
-  border: none;
-  padding: 14px;
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 0.1em;
+  font-size: 9px;
+  padding: 4px 10px;
+  border-radius: 12px;
   cursor: pointer;
-  text-align: center;
 }
 
-.primary-action-btn:active {
-  background: #cccccc;
+.menu-pill-btn:active, .menu-pill-btn.active {
+  color: #fff;
+  border-color: #fff;
+  background: #222;
+}
+
+.center-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.speed-readout {
+  font-size: 38px;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.speed-unit {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.gyro-steering-badge {
+  font-size: 9px;
+  color: var(--accent-cyan);
+  background: rgba(0, 255, 204, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+  border: 1px solid rgba(0, 255, 204, 0.3);
 }
 
 /* Orientation Hint for Portrait Mode */
@@ -336,7 +449,6 @@ html, body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  height: 100dvh;
   background: var(--bg-primary);
   z-index: 1000;
   flex-direction: column;
@@ -344,11 +456,69 @@ html, body {
   align-items: center;
   padding: 24px;
   text-align: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 @media (orientation: portrait) {
   #orientation-warning {
     display: flex;
   }
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-card {
+  width: 90%;
+  max-width: 400px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-focus);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: 8px;
+}
+
+.modal-header {
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  color: #fff;
+}
+
+.modal-body {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.primary-btn {
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.primary-btn:active {
+  background: #bbb;
 }
