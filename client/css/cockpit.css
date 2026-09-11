@@ -1,16 +1,16 @@
 /* Project Controller - Ultra-Minimal Industrial Cockpit Styling */
 :root {
-  --bg-primary: #050505;
-  --bg-surface: #0f0f0f;
-  --bg-active: #1a1a1a;
-  --border-hairline: #242424;
+  --bg-primary: #040404;
+  --bg-surface: #0e0e0e;
+  --bg-active: #1c1c1c;
+  --border-hairline: #202020;
   --border-focus: #444444;
-  --text-primary: #ededed;
-  --text-dim: #707070;
-  --text-alert: #ff3333;
+  --text-primary: #f0f0f0;
+  --text-dim: #777777;
   --accent-cyan: #00ffcc;
   --accent-amber: #ffaa00;
-  --accent-crimson: #ff3b30;
+  --accent-crimson: #ff3344;
+  --accent-blue: #2f80ed;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
 }
 
@@ -20,18 +20,20 @@
   padding: 0;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: none;
 }
 
 html, body {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  height: -webkit-fill-available;
   overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.2;
+  font-size: 11px;
 }
 
 #cockpit-container {
@@ -39,31 +41,37 @@ html, body {
   flex-direction: column;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   position: relative;
+  padding-left: max(4px, env(safe-area-inset-left));
+  padding-right: max(4px, env(safe-area-inset-right));
+  padding-bottom: max(2px, env(safe-area-inset-bottom));
 }
 
-/* Header Telemetry Ribbon */
+/* Compact Top Telemetry Ribbon (28px) */
 #telemetry-ribbon {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 36px;
-  padding: 0 16px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--border-hairline);
   background: var(--bg-surface);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.05em;
+  z-index: 10;
 }
 
 .ribbon-group {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   align-items: center;
 }
 
 .ribbon-item {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ribbon-label {
@@ -89,23 +97,48 @@ html, body {
   box-shadow: 0 0 6px var(--accent-cyan);
 }
 
-/* Main Flight Cockpit Deck */
+.ribbon-btn {
+  background: #181818;
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 3px 8px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ribbon-btn:active, .ribbon-btn.active {
+  background: #333333;
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Main Flight Cockpit Deck: Left Wing | Center HUD | Right Wing */
 #flight-deck {
   display: grid;
-  grid-template-columns: 28% 44% 28%;
+  grid-template-columns: 26% 48% 26%;
   flex: 1;
-  height: calc(100vh - 36px);
+  min-height: 0;
+  height: calc(100dvh - 28px);
   position: relative;
+  overflow: hidden;
 }
 
 /* Control Wings (Left & Right) */
 .control-wing {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  gap: 10px;
+  padding: 6px;
+  gap: 6px;
   background-color: var(--bg-primary);
   border-right: 1px solid var(--border-hairline);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .control-wing.right {
@@ -113,15 +146,17 @@ html, body {
   border-left: 1px solid var(--border-hairline);
 }
 
-/* Analog Touch Sliders */
+/* Analog Touch Sliders (Gas & Brake) */
 .slider-container {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
   position: relative;
   overflow: hidden;
+  touch-action: none;
 }
 
 .slider-fill {
@@ -130,26 +165,26 @@ html, body {
   left: 0;
   right: 0;
   height: 0%;
-  transition: height 0.04s ease-out;
+  transition: height 0.03s linear;
   pointer-events: none;
 }
 
 #brake-fill {
-  background-color: rgba(255, 51, 51, 0.25);
+  background-color: rgba(255, 51, 68, 0.35);
   border-top: 2px solid var(--accent-crimson);
 }
 
 #throttle-fill {
-  background-color: rgba(0, 255, 204, 0.25);
+  background-color: rgba(0, 255, 204, 0.35);
   border-top: 2px solid var(--accent-cyan);
 }
 
 .slider-label {
   position: absolute;
-  top: 10px;
-  left: 12px;
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  top: 6px;
+  left: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
   pointer-events: none;
   z-index: 2;
@@ -157,19 +192,20 @@ html, body {
 
 .slider-value {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
-  font-size: 20px;
+  bottom: 6px;
+  right: 8px;
+  font-size: 16px;
   font-weight: bold;
   pointer-events: none;
   z-index: 2;
 }
 
-/* Digital Buttons */
+/* Tactical Action Buttons Row */
 .button-row {
   display: flex;
-  gap: 8px;
-  height: 64px;
+  gap: 6px;
+  height: 48px;
+  min-height: 48px;
 }
 
 .ctrl-btn {
@@ -182,27 +218,41 @@ html, body {
   border: 1px solid var(--border-hairline);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  transition: background-color 0.05s, border-color 0.05s;
+  touch-action: none;
+  transition: background-color 0.05s, border-color 0.05s, transform 0.05s;
 }
 
 .ctrl-btn:active, .ctrl-btn.active {
-  background: var(--bg-active);
+  background: #252525;
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  transform: scale(0.97);
+}
+
+.ctrl-btn.btn-jump:active, .ctrl-btn.btn-jump.active {
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }
 
-.ctrl-btn.danger:active, .ctrl-btn.danger.active {
-  border-color: var(--accent-crimson);
-  color: var(--accent-crimson);
+.ctrl-btn.btn-boost {
+  border-color: #443311;
+}
+
+.ctrl-btn.btn-boost:active, .ctrl-btn.btn-boost.active {
+  background: #332200;
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
 }
 
 .btn-sub {
-  font-size: 9px;
+  font-size: 8px;
+  font-weight: normal;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 /* Center HUD Canvas */
@@ -211,6 +261,8 @@ html, body {
   flex-direction: column;
   position: relative;
   background: #020202;
+  min-height: 0;
+  overflow: hidden;
 }
 
 #hud-canvas {
@@ -226,7 +278,8 @@ html, body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.92);
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.94);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -238,22 +291,22 @@ html, body {
   max-width: 440px;
   background: var(--bg-surface);
   border: 1px solid var(--border-focus);
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .modal-header {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
   letter-spacing: 0.1em;
   border-bottom: 1px solid var(--border-hairline);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 .modal-body {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-dim);
   line-height: 1.5;
 }
@@ -283,14 +336,15 @@ html, body {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-primary);
   z-index: 1000;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 30px;
+  padding: 24px;
   text-align: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 @media (orientation: portrait) {

@@ -84,6 +84,11 @@ class ViGEmXInputGamepad(AbstractGamepad):
             "RB": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
             "START": vg.XUSB_BUTTON.XUSB_GAMEPAD_START,
             "BACK": vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK,
+            # Rocket League & Racing Aliases
+            "JUMP": vg.XUSB_BUTTON.XUSB_GAMEPAD_A,
+            "BOOST": vg.XUSB_BUTTON.XUSB_GAMEPAD_B,
+            "POWERSLIDE": vg.XUSB_BUTTON.XUSB_GAMEPAD_X,
+            "BALL_CAM": vg.XUSB_BUTTON.XUSB_GAMEPAD_Y,
             "HANDBRAKE": vg.XUSB_BUTTON.XUSB_GAMEPAD_A,
             "SHIFT_UP": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
             "SHIFT_DOWN": vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,
@@ -186,12 +191,18 @@ class KeyboardFallbackGamepad(AbstractGamepad):
         btn_map = {
             "HANDBRAKE": self.VK_SPACE,
             "A": self.VK_SPACE,
+            "JUMP": self.VK_SPACE,
+            "B": 0xA0,          # VK_LSHIFT (Boost in Rocket League)
+            "BOOST": 0xA0,
+            "X": 0xA0,          # VK_LSHIFT (Powerslide in Rocket League)
+            "POWERSLIDE": 0xA0,
+            "Y": 0x46,          # 'F' (Ball Cam toggle in Rocket League)
+            "BALL_CAM": 0x46,
             "SHIFT_UP": self.VK_E,
             "RB": self.VK_E,
             "SHIFT_DOWN": self.VK_Q,
             "LB": self.VK_Q,
             "HIGH_BEAM": self.VK_H,
-            "X": self.VK_H,
         }
         vk = btn_map.get(button_name.upper())
         if vk:

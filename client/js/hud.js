@@ -87,9 +87,9 @@ export class CockpitHUD {
 
   _renderTachometer(ctx, w, h) {
     const barW = w - 32;
-    const barH = 14;
+    const barH = Math.max(8, Math.min(14, Math.floor(h * 0.06)));
     const barX = 16;
-    const barY = 16;
+    const barY = Math.max(8, Math.floor(h * 0.04));
     const numSegments = 32;
     const segSpacing = 3;
     const segW = (barW - (numSegments - 1) * segSpacing) / numSegments;
@@ -121,13 +121,14 @@ export class CockpitHUD {
 
     // RPM Numerical label
     ctx.fillStyle = "#888888";
-    ctx.font = "10px monospace";
+    ctx.font = "9px monospace";
     ctx.textAlign = "right";
-    ctx.fillText(`${Math.round(rpm)} RPM`, barX + barW, barY + barH + 12);
+    ctx.fillText(`${Math.round(rpm)} RPM`, barX + barW, barY + barH + 11);
   }
 
   _renderSpeedAndGear(ctx, w, h) {
     const centerY = h * 0.44;
+    const fontSize = Math.max(28, Math.min(56, Math.floor(h * 0.24)));
 
     // Gear Indicator (Large Bold)
     let gearText = "N";
@@ -136,24 +137,24 @@ export class CockpitHUD {
     else if (this.telemetry.gear > 0) gearText = `${this.telemetry.gear}`;
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 64px monospace";
+    ctx.font = `bold ${fontSize}px monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(gearText, w * 0.35, centerY);
 
     ctx.fillStyle = "#666666";
-    ctx.font = "10px monospace";
-    ctx.fillText("GEAR", w * 0.35, centerY + 42);
+    ctx.font = "9px monospace";
+    ctx.fillText("GEAR", w * 0.35, centerY + (fontSize * 0.55));
 
     // Speed Indicator (Digital Numeric)
     const speed = Math.round(this.telemetry.speed_kmh || 0);
     ctx.fillStyle = "#ededed";
-    ctx.font = "bold 58px monospace";
+    ctx.font = `bold ${fontSize}px monospace`;
     ctx.fillText(`${speed}`, w * 0.65, centerY);
 
     ctx.fillStyle = "#666666";
-    ctx.font = "10px monospace";
-    ctx.fillText("KM/H", w * 0.65, centerY + 42);
+    ctx.font = "9px monospace";
+    ctx.fillText("KM/H", w * 0.65, centerY + (fontSize * 0.55));
   }
 
   _renderGMeter(ctx, w, h) {

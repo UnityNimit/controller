@@ -61,18 +61,53 @@ class CockpitController {
       throttleVal: document.getElementById("throttle-pct"),
       engageModal: document.getElementById("engage-modal"),
       engageBtn: document.getElementById("engage-btn"),
-      calibrateBtn: document.getElementById("calibrate-btn")
+      calibrateBtn: document.getElementById("calibrate-btn"),
+      fullscreenBtn: document.getElementById("fullscreen-btn")
     };
 
     this.dom.engageBtn.addEventListener("click", () => this.engageCockpit());
     this.dom.calibrateBtn.addEventListener("click", () => this.calibrateZero());
+    if (this.dom.fullscreenBtn) {
+      this.dom.fullscreenBtn.addEventListener("click", () => this.toggleFullscreen());
+    }
+  }
+
+  toggleFullscreen() {
+    const el = document.documentElement;
+    try {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        } else if (el.webkitRequestFullScreen) {
+          el.webkitRequestFullScreen();
+        } else if (el.mozRequestFullScreen) {
+          el.mozRequestFullScreen();
+        } else if (el.msRequestFullscreen) {
+          el.msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    } catch (e) {
+      console.debug("Fullscreen error", e);
+    }
+    window.scrollTo(0, 1);
   }
 
   async engageCockpit() {
-    // 1. Initialize Web Audio Context
+    // 1. Enter Fullscreen Mode
+    this.toggleFullscreen();
+
+    // 2. Initialize Web Audio Context
     this.synth.initAudio();
 
-    // 2. Request Motion Sensor Permissions (required by iOS Safari)
+    // 3. Request Motion Sensor Permissions (required by iOS Safari)
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
       try {
         const perm = await DeviceOrientationEvent.requestPermission();
@@ -207,28 +242,35 @@ class CockpitController {
     throttleZone.addEventListener("pointerup", releaseThrottle);
     throttleZone.addEventListener("pointercancel", releaseThrottle);
 
-    // Digital Buttons
-    const bindBtn = (id, buttonKey, isDanger = false) => {
+    // Digital Action Buttons with multi-touch pointer capture
+    const bindBtn = (id, buttonKey, aliases = []) => {
       const el = document.getElementById(id);
       if (!el) return;
-      const press = () => {
+      const press = (e) => {
+        try {
+          if (e.pointerId) el.setPointerCapture(e.pointerId);
+        } catch (_) {}
         this.buttons[buttonKey] = true;
+        for (const a of aliases) this.buttons[a] = true;
         el.classList.add("active");
         this.haptics.triggerClick();
       };
-      const release = () => {
+      const release = (e) => {
         this.buttons[buttonKey] = false;
+        for (const a of aliases) this.buttons[a] = false;
         el.classList.remove("active");
       };
       el.addEventListener("pointerdown", press);
       el.addEventListener("pointerup", release);
+      el.addEventListener("pointercancel", release);
       el.addEventListener("pointerleave", release);
     };
 
-    bindBtn("btn-shift-down", "SHIFT_DOWN");
-    bindBtn("btn-shift-up", "SHIFT_UP");
-    bindBtn("btn-handbrake", "HANDBRAKE", true);
-    bindBtn("btn-beam", "HIGH_BEAM");
+    // Primary Game Controls (Rocket League & Racing)
+    bindBtn("btn-jump", "JUMP", ["A"]);
+    bindBtn("btn-boost", "BOOST", ["B"]);
+    bindBtn("btn-slide", "POWERSLIDE", ["X", "HANDBRAKE"]);
+    bindBtn("btn-cam", "BALL_CAM", ["Y"]);
   }
 
   calibrateZero() {
