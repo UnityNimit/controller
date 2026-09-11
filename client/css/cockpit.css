@@ -1,19 +1,16 @@
-/* Project Controller - Pro Gamepad & Teleoperation Controller */
+/* Project Controller - Legendary Mobile Touch Gamepad */
 :root {
-  --bg-primary: #070707;
-  --bg-surface: #111111;
-  --bg-elevated: #1a1a1a;
-  --bg-active: #282828;
-  --border-hairline: #222222;
-  --border-focus: #3a3a3a;
-  --text-primary: #f2f2f2;
-  --text-dim: #777777;
-  --accent-a: #00ff88;  /* A: Jump (Green) */
-  --accent-b: #ff3344;  /* B: Boost (Red) */
-  --accent-x: #2f80ed;  /* X: Powerslide (Blue) */
-  --accent-y: #ffbb00;  /* Y: Ball Cam (Amber) */
+  --bg-dark: #060608;
+  --bg-card: rgba(18, 18, 22, 0.75);
+  --bg-card-active: rgba(35, 35, 45, 0.9);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-bright: rgba(255, 255, 255, 0.3);
+  --accent-a: #00ff88;   /* A: Jump (Green) */
+  --accent-b: #ff3344;   /* B: Boost (Crimson) */
+  --accent-x: #2f80ed;   /* X: Powerslide (Azure) */
+  --accent-y: #ffbb00;   /* Y: Ball Cam (Gold) */
   --accent-cyan: #00ffcc;
-  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
 }
 
 * {
@@ -32,127 +29,158 @@ html, body {
   height: 100dvh;
   height: -webkit-fill-available;
   overflow: hidden;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--bg-dark);
+  color: #f0f0f0;
   font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 #controller-app {
-  display: flex;
-  flex-direction: column;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   position: relative;
+  display: flex;
+  overflow: hidden;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Minimal Header Bar (30px) */
-#top-bar {
+/* ==========================================================================
+   1. FLOATING MINIMALIST STATUS BAR (NO BULKY TOP BAR)
+   ========================================================================== */
+#floating-status-bar {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  height: 30px;
-  min-height: 30px;
-  padding: 0 12px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-hairline);
-  font-size: 10px;
-  z-index: 20;
+  gap: 6px;
+  z-index: 50;
+  pointer-events: auto;
 }
 
-.top-group {
+.status-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 9px;
+  color: #bbb;
+  cursor: pointer;
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: #444;
+  background: #444;
 }
 
 .status-dot.online {
-  background-color: var(--accent-a);
+  background: var(--accent-a);
   box-shadow: 0 0 6px var(--accent-a);
 }
 
-.bar-btn {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-hairline);
-  color: var(--text-primary);
+.pill-divider {
+  color: #444;
+  margin: 0 2px;
+}
+
+.pill-toggle {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 3px 9px;
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: bold;
-  padding: 3px 8px;
-  border-radius: 3px;
+  color: #aaa;
   cursor: pointer;
-  letter-spacing: 0.05em;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  transition: all 0.08s ease;
 }
 
-.bar-btn:active, .bar-btn.active {
-  background: #333;
+.pill-toggle.active {
+  color: #fff;
   border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  background: rgba(0, 255, 204, 0.15);
+  box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
 }
 
-/* Controller Deck: Left | Center | Right */
-#controller-deck {
-  display: grid;
-  grid-template-columns: 38% 24% 38%;
+.pill-btn {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #999;
+  cursor: pointer;
+}
+
+.pill-btn:active {
+  background: #333;
+  color: #fff;
+}
+
+/* ==========================================================================
+   2. DUAL GAMEPAD WINGS: LEFT (STICK + LT/LB) & RIGHT (ABXY + RT/RB)
+   ========================================================================== */
+#left-gamepad-zone, #right-gamepad-zone {
   flex: 1;
-  min-height: 0;
-  height: calc(100dvh - 30px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   position: relative;
-  overflow: hidden;
-}
-
-/* Control Wings (Left & Right) */
-.gamepad-wing {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 10px;
-  gap: 8px;
+  padding: 6px 12px;
   min-height: 0;
   overflow: hidden;
 }
 
-.gamepad-wing.left {
-  border-right: 1px solid var(--border-hairline);
-}
-
-.gamepad-wing.right {
-  border-left: 1px solid var(--border-hairline);
-}
-
-/* Shoulder Trigger Rows */
-.shoulder-row {
+/* Shoulder Cluster (Triggers & Bumpers) */
+.shoulder-cluster {
   display: flex;
-  gap: 6px;
-  height: 48px;
-  min-height: 48px;
+  gap: 8px;
+  height: 52px;
+  min-height: 52px;
+  z-index: 20;
 }
 
-.trigger-box {
+.shoulder-trigger {
   flex: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hairline);
-  border-radius: 6px;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 10px;
   position: relative;
   overflow: hidden;
   cursor: pointer;
   touch-action: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  transition: transform 0.04s, border-color 0.05s;
+}
+
+.shoulder-trigger:active, .shoulder-trigger.active {
+  transform: scale(0.97);
+}
+
+#lt-trigger:active, #lt-trigger.active {
+  border-color: var(--accent-b);
+}
+
+#rt-trigger:active, #rt-trigger.active {
+  border-color: var(--accent-a);
 }
 
 .trigger-fill {
@@ -162,150 +190,158 @@ html, body {
   right: 0;
   height: 0%;
   pointer-events: none;
-  transition: height 0.04s linear;
+  transition: height 0.03s linear;
 }
 
 #lt-fill {
-  background-color: rgba(255, 51, 68, 0.35);
+  background: rgba(255, 51, 68, 0.4);
   border-top: 2px solid var(--accent-b);
 }
 
 #rt-fill {
-  background-color: rgba(0, 255, 136, 0.35);
+  background: rgba(0, 255, 136, 0.4);
   border-top: 2px solid var(--accent-a);
 }
 
-.trigger-title {
-  font-size: 11px;
-  font-weight: bold;
-  letter-spacing: 0.08em;
+.trigger-label {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
   z-index: 2;
-  pointer-events: none;
 }
 
 .trigger-sub {
   font-size: 8px;
-  color: var(--text-dim);
+  color: #888;
   z-index: 2;
-  pointer-events: none;
+  margin-top: 1px;
 }
 
-.bumper-btn {
+.shoulder-bumper {
   flex: 1;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 10px;
+  color: #ccc;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 900;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hairline);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: bold;
+  justify-content: center;
   cursor: pointer;
   touch-action: none;
-  transition: background-color 0.05s, border-color 0.05s, transform 0.04s;
+  transition: transform 0.04s, background 0.05s, border-color 0.05s;
 }
 
-.bumper-btn:active, .bumper-btn.active {
-  background: var(--bg-active);
+.shoulder-bumper:active, .shoulder-bumper.active {
+  background: var(--bg-card-active);
   border-color: #fff;
+  color: #fff;
   transform: scale(0.96);
 }
 
-/* Wing Lower Action Zones */
-.wing-body {
+/* ==========================================================================
+   3. LEFT SIDE: DYNAMIC FLOATING JOYSTICK ARENA
+   ========================================================================== */
+#left-stick-arena {
   flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
   position: relative;
-}
-
-/* Left Side: Virtual Thumbstick Zone */
-#stick-zone {
-  width: 140px;
-  height: 140px;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 1 / 1;
-  background: var(--bg-surface);
-  border: 2px solid var(--border-hairline);
-  border-radius: 50%;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   touch-action: none;
-}
-
-#stick-knob {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: #202020;
-  border: 2px solid #555;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-  position: absolute;
-  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: bold;
-  color: #aaa;
 }
 
-#stick-crosshair {
-  position: absolute;
+#stick-hint {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+/* Floating Joystick (Appears wherever thumb touches) */
+#floating-joystick {
+  position: fixed;
+  width: 130px;
+  height: 130px;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 0.12s ease-out;
+}
+
+#stick-base {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(20,20,30,0.5) 70%);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.05);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#stick-crosshair::before {
-  content: "";
+#stick-stick {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a3a48 0%, #1a1a24 70%, #0d0d12 100%);
+  border: 2px solid #666;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.25);
   position: absolute;
-  top: 50%;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: #222;
+  top: calc(50% - 28px);
+  left: calc(50% - 28px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#stick-crosshair::after {
+#stick-stick::after {
   content: "";
-  position: absolute;
-  left: 50%;
-  top: 10%;
-  bottom: 10%;
-  width: 1px;
-  background: #222;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  opacity: 0.85;
 }
 
-/* Right Side: ABXY Diamond Action Cluster */
-#abxy-cluster {
-  width: 160px;
-  height: 160px;
+/* ==========================================================================
+   4. RIGHT SIDE: HUGE ERGONOMIC XYBA ACTION CLUSTER
+   ========================================================================== */
+#action-cluster-arena {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  touch-action: none;
+}
+
+#abxy-pad {
+  width: 210px;
+  height: 210px;
   max-width: 100%;
   max-height: 100%;
-  aspect-ratio: 1 / 1;
   position: relative;
 }
 
-.action-btn {
-  width: 52px;
-  height: 52px;
+/* HUGE Tactile Buttons with Realistic Bevel & Mechanical Keycap Feel */
+.huge-btn {
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
-  background: var(--bg-surface);
-  border: 2px solid var(--border-hairline);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: bold;
+  background: radial-gradient(circle at 35% 30%, rgba(45, 45, 55, 0.9) 0%, rgba(18, 18, 24, 0.95) 70%, rgba(10, 10, 14, 0.98) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid var(--border-subtle);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.7), inset 0 1.5px 2px rgba(255, 255, 255, 0.25), inset 0 -2px 4px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -313,144 +349,77 @@ html, body {
   position: absolute;
   cursor: pointer;
   touch-action: none;
-  transition: transform 0.04s, background-color 0.05s, border-color 0.05s;
+  transition: transform 0.04s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.05s ease, border-color 0.05s ease, background 0.05s ease;
 }
 
-.action-btn:active, .action-btn.active {
-  transform: scale(0.92);
+.huge-btn:active, .huge-btn.active {
+  transform: scale(0.92) translateY(2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), inset 0 3px 6px rgba(0, 0, 0, 0.8);
 }
 
-.btn-label {
-  font-size: 15px;
+.btn-letter {
+  font-size: 26px;
+  font-weight: 900;
   line-height: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
-.btn-desc {
-  font-size: 7px;
-  font-weight: normal;
-  color: var(--text-dim);
-  margin-top: 1px;
-  text-transform: uppercase;
+.btn-tag {
+  font-size: 8px;
+  font-weight: bold;
+  color: #888;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
 }
 
 /* Diamond Button Coordinates */
 #btn-a {
-  bottom: 0;
-  left: 54px;
-  border-color: #004422;
+  bottom: 4px;
+  left: 70px;
+  border-color: rgba(0, 255, 136, 0.3);
 }
 #btn-a:active, #btn-a.active {
-  background: #003318;
+  background: radial-gradient(circle at 35% 30%, rgba(0, 255, 136, 0.35) 0%, rgba(0, 60, 30, 0.9) 100%);
   border-color: var(--accent-a);
-  color: var(--accent-a);
+  box-shadow: 0 0 25px rgba(0, 255, 136, 0.6), inset 0 0 10px rgba(0, 255, 136, 0.3);
 }
 
 #btn-b {
-  right: 0;
-  top: 54px;
-  border-color: #441118;
+  right: 4px;
+  top: 70px;
+  border-color: rgba(255, 51, 68, 0.3);
 }
 #btn-b:active, #btn-b.active {
-  background: #33080e;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 51, 68, 0.35) 0%, rgba(70, 10, 20, 0.9) 100%);
   border-color: var(--accent-b);
-  color: var(--accent-b);
+  box-shadow: 0 0 25px rgba(255, 51, 68, 0.6), inset 0 0 10px rgba(255, 51, 68, 0.3);
 }
 
 #btn-x {
-  left: 0;
-  top: 54px;
-  border-color: #112244;
+  left: 4px;
+  top: 70px;
+  border-color: rgba(47, 128, 237, 0.3);
 }
 #btn-x:active, #btn-x.active {
-  background: #09152b;
+  background: radial-gradient(circle at 35% 30%, rgba(47, 128, 237, 0.35) 0%, rgba(15, 35, 75, 0.9) 100%);
   border-color: var(--accent-x);
-  color: var(--accent-x);
+  box-shadow: 0 0 25px rgba(47, 128, 237, 0.6), inset 0 0 10px rgba(47, 128, 237, 0.3);
 }
 
 #btn-y {
-  top: 0;
-  left: 54px;
-  border-color: #443300;
+  top: 4px;
+  left: 70px;
+  border-color: rgba(255, 187, 0, 0.3);
 }
 #btn-y:active, #btn-y.active {
-  background: #2b2000;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 187, 0, 0.35) 0%, rgba(70, 50, 0, 0.9) 100%);
   border-color: var(--accent-y);
-  color: var(--accent-y);
+  box-shadow: 0 0 25px rgba(255, 187, 0, 0.6), inset 0 0 10px rgba(255, 187, 0, 0.3);
 }
 
-/* Center Column: Status, Speed, Nav */
-#center-column {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 6px;
-  background: #030303;
-}
-
-.center-menu-row {
-  display: flex;
-  gap: 8px;
-}
-
-.menu-pill-btn {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-hairline);
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.menu-pill-btn:active, .menu-pill-btn.active {
-  color: #fff;
-  border-color: #fff;
-  background: #222;
-}
-
-.center-display {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.guide-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--bg-surface);
-  border: 2px solid #333;
-  color: #888;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  touch-action: none;
-  transition: all 0.05s ease;
-}
-
-.guide-btn:active, .guide-btn.active {
-  background: #333;
-  border-color: #fff;
-  color: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
-}
-
-.gyro-steering-badge {
-  font-size: 8px;
-  color: var(--accent-cyan);
-  background: rgba(0, 255, 204, 0.08);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 255, 204, 0.2);
-  letter-spacing: 0.05em;
-}
-
-/* Orientation Hint for Portrait Mode */
+/* ==========================================================================
+   5. PORTRAIT & START MODALS
+   ========================================================================== */
 #orientation-warning {
   display: none;
   position: fixed;
@@ -458,7 +427,8 @@ html, body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: var(--bg-primary);
+  height: 100dvh;
+  background: var(--bg-dark);
   z-index: 1000;
   flex-direction: column;
   justify-content: center;
@@ -474,7 +444,6 @@ html, body {
   }
 }
 
-/* Modal */
 .modal-backdrop {
   position: fixed;
   top: 0;
@@ -492,26 +461,13 @@ html, body {
 .modal-card {
   width: 90%;
   max-width: 400px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-focus);
-  padding: 22px;
+  background: #111116;
+  border: 1px solid #333;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  border-radius: 8px;
-}
-
-.modal-header {
-  font-size: 13px;
-  font-weight: bold;
-  letter-spacing: 0.08em;
-  color: #fff;
-}
-
-.modal-body {
-  font-size: 11px;
-  color: var(--text-dim);
-  line-height: 1.5;
+  border-radius: 12px;
 }
 
 .primary-btn {
@@ -520,14 +476,10 @@ html, body {
   border: none;
   padding: 14px;
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   cursor: pointer;
   text-align: center;
-  border-radius: 4px;
-}
-
-.primary-btn:active {
-  background: #bbb;
+  border-radius: 6px;
 }
