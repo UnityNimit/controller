@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>PROJECT CONTROLLER // DIGITAL COCKPIT</title>
+  <link rel="stylesheet" href="css/cockpit.css">
+</head>
+<body>
+
+  <div id="cockpit-container">
+    <!-- Top Telemetry & Health Ribbon -->
+    <header id="telemetry-ribbon">
+      <div class="ribbon-group">
+        <div class="ribbon-item">
+          <span class="status-indicator" id="status-dot"></span>
+          <span class="ribbon-val" id="link-status">CONNECTING</span>
+        </div>
+        <div class="ribbon-item">
+          <span class="ribbon-label">SLOT:</span>
+          <span class="ribbon-val" id="slot-val">P1</span>
+        </div>
+      </div>
+
+      <div class="ribbon-group">
+        <button class="ctrl-btn" id="calibrate-btn" style="height: 24px; padding: 0 8px; font-size: 10px;">
+          CALIBRATE ZERO
+        </button>
+        <div class="ribbon-item">
+          <span class="ribbon-label">RTT:</span>
+          <span class="ribbon-val" id="rtt-val">--</span>
+        </div>
+        <div class="ribbon-item">
+          <span class="ribbon-label">BUS:</span>
+          <span class="ribbon-val" id="hz-val">--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Cockpit Flight Deck -->
+    <main id="flight-deck">
+      <!-- Left Control Wing: Brake & Gear Down -->
+      <section class="control-wing left">
+        <div class="slider-container" id="brake-zone">
+          <div class="slider-fill" id="brake-fill"></div>
+          <span class="slider-label">BRAKE // LT</span>
+          <span class="slider-value" id="brake-pct">0%</span>
+        </div>
+        <div class="button-row">
+          <button class="ctrl-btn danger" id="btn-handbrake">
+            HB
+            <span class="btn-sub">E-BRAKE</span>
+          </button>
+          <button class="ctrl-btn" id="btn-shift-down">
+            DOWN
+            <span class="btn-sub">GEAR -</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Center Deck: 60 FPS HTML5 Canvas HUD -->
+      <section id="center-deck">
+        <canvas id="hud-canvas"></canvas>
+      </section>
+
+      <!-- Right Control Wing: Throttle & Gear Up -->
+      <section class="control-wing right">
+        <div class="slider-container" id="throttle-zone">
+          <div class="slider-fill" id="throttle-fill"></div>
+          <span class="slider-label">GAS // RT</span>
+          <span class="slider-value" id="throttle-pct">0%</span>
+        </div>
+        <div class="button-row">
+          <button class="ctrl-btn" id="btn-shift-up">
+            UP
+            <span class="btn-sub">GEAR +</span>
+          </button>
+          <button class="ctrl-btn" id="btn-beam">
+            BEAM
+            <span class="btn-sub">OPTIC</span>
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Portrait Orientation Warning -->
+  <div id="orientation-warning">
+    <div style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">ROTATE DEVICE</div>
+    <div style="color: #888888; font-size: 13px;">Landscape orientation required for teleoperation cockpit.</div>
+  </div>
+
+  <!-- Engagement & Permissions Modal -->
+  <div class="modal-backdrop" id="engage-modal">
+    <div class="modal-card">
+      <div class="modal-header">PROJECT CONTROLLER // SYSTEM INITIALIZATION</div>
+      <div class="modal-body">
+        High-Performance Cyber-Physical Teleoperation Framework.<br><br>
+        • 6-DoF Gyroscopic Sensor Fusion & Deadband Filtering<br>
+        • Bi-Directional Closed-Loop Dynamic Haptics<br>
+        • Native OS XInput Virtual Hardware Interrupts
+      </div>
+      <button class="primary-action-btn" id="engage-btn">ENGAGE COCKPIT</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/cockpit.js"></script>
+</body>
+</html>

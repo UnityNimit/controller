@@ -1,0 +1,300 @@
+/* Project Controller - Ultra-Minimal Industrial Cockpit Styling */
+:root {
+  --bg-primary: #050505;
+  --bg-surface: #0f0f0f;
+  --bg-active: #1a1a1a;
+  --border-hairline: #242424;
+  --border-focus: #444444;
+  --text-primary: #ededed;
+  --text-dim: #707070;
+  --text-alert: #ff3333;
+  --accent-cyan: #00ffcc;
+  --accent-amber: #ffaa00;
+  --accent-crimson: #ff3b30;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+#cockpit-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+/* Header Telemetry Ribbon */
+#telemetry-ribbon {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--bg-surface);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.ribbon-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.ribbon-item {
+  display: flex;
+  gap: 6px;
+}
+
+.ribbon-label {
+  color: var(--text-dim);
+}
+
+.ribbon-val {
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #333333;
+  margin-right: 4px;
+}
+
+.status-indicator.online {
+  background-color: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan);
+}
+
+/* Main Flight Cockpit Deck */
+#flight-deck {
+  display: grid;
+  grid-template-columns: 28% 44% 28%;
+  flex: 1;
+  height: calc(100vh - 36px);
+  position: relative;
+}
+
+/* Control Wings (Left & Right) */
+.control-wing {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+  background-color: var(--bg-primary);
+  border-right: 1px solid var(--border-hairline);
+}
+
+.control-wing.right {
+  border-right: none;
+  border-left: 1px solid var(--border-hairline);
+}
+
+/* Analog Touch Sliders */
+.slider-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  position: relative;
+  overflow: hidden;
+}
+
+.slider-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  transition: height 0.04s ease-out;
+  pointer-events: none;
+}
+
+#brake-fill {
+  background-color: rgba(255, 51, 51, 0.25);
+  border-top: 2px solid var(--accent-crimson);
+}
+
+#throttle-fill {
+  background-color: rgba(0, 255, 204, 0.25);
+  border-top: 2px solid var(--accent-cyan);
+}
+
+.slider-label {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.slider-value {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Digital Buttons */
+.button-row {
+  display: flex;
+  gap: 8px;
+  height: 64px;
+}
+
+.ctrl-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background-color 0.05s, border-color 0.05s;
+}
+
+.ctrl-btn:active, .ctrl-btn.active {
+  background: var(--bg-active);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.ctrl-btn.danger:active, .ctrl-btn.danger.active {
+  border-color: var(--accent-crimson);
+  color: var(--accent-crimson);
+}
+
+.btn-sub {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* Center HUD Canvas */
+#center-deck {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #020202;
+}
+
+#hud-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Overlay & Modals */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-card {
+  width: 90%;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-focus);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: 8px;
+}
+
+.modal-body {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.primary-action-btn {
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  text-align: center;
+}
+
+.primary-action-btn:active {
+  background: #cccccc;
+}
+
+/* Orientation Hint for Portrait Mode */
+#orientation-warning {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-primary);
+  z-index: 1000;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  text-align: center;
+  gap: 12px;
+}
+
+@media (orientation: portrait) {
+  #orientation-warning {
+    display: flex;
+  }
+}

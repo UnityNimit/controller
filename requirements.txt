@@ -1,0 +1,6 @@
+websockets>=13.0
+vgamepad>=0.1.0
+cryptography>=42.0.0
+qrcode>=8.0
+matplotlib>=3.8.0
+pytest>=8.0.0
