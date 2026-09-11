@@ -324,7 +324,6 @@ class ControllerGatewayServer:
                         filtered_angle = 0.0
                         stick_x = int(data.get("stick_x", 0))
 
-                    # Thumbstick Y (pitch / aerials)
                     stick_y = int(data.get("stick_y", 0))
 
                     # Process Triggers (Gas & Brake)
@@ -332,17 +331,8 @@ class ControllerGatewayServer:
                     raw_br = float(data.get("brake", 0.0))
                     th_byte, br_byte = pipeline.process_triggers(raw_th, raw_br)
 
-                    # Process Acceleration & Handbrake Jerk
-                    accel = data.get("accel", {})
-                    ax = float(accel.get("x", 0.0))
-                    ay = float(accel.get("y", 0.0))
-                    az = float(accel.get("z", 0.0))
-                    jerk_handbrake = pipeline.process_acceleration(ax, ay, az)
-
-                    # Digital Buttons (Shifting, Handbrake, High Beams)
+                    # Digital Buttons strictly from client input (no ghost triggers)
                     buttons = data.get("buttons", {})
-                    if jerk_handbrake or data.get("handbrake", False):
-                        buttons["HANDBRAKE"] = True
 
                     # Dispatch to OS Virtual Gamepad
                     control_state = {

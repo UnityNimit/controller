@@ -60,7 +60,6 @@ class GamepadController {
       statusDot: document.getElementById("status-dot"),
       statusText: document.getElementById("link-status"),
       rttText: document.getElementById("rtt-val"),
-      speedText: document.getElementById("speed-val"),
       gyroBadge: document.getElementById("gyro-badge"),
       gyroBtn: document.getElementById("gyro-toggle-btn"),
       fullscreenBtn: document.getElementById("fullscreen-btn"),
@@ -320,6 +319,7 @@ class GamepadController {
     bindBtn("btn-rb", "RB");
     bindBtn("btn-start", "START");
     bindBtn("btn-back", "BACK");
+    bindBtn("btn-guide", "GUIDE");
   }
 
   calibrateZero() {
@@ -356,19 +356,7 @@ class GamepadController {
         this.connected = true;
         this.playerSlot = msg.player_slot;
       } else if (msg.type === "TELEMETRY") {
-        // Update speed readout
-        if (msg.data && msg.data.speed_kmh !== undefined) {
-          this.speed = Math.round(msg.data.speed_kmh);
-          this.dom.speedText.innerText = `${this.speed}`;
-        }
-        // Process Haptics (rumble on collision/slip)
-        if (msg.haptics) {
-          if (msg.haptics.impact_spike) {
-            this.haptics.triggerImpact();
-          } else if (msg.haptics.slip_rumble) {
-            this.haptics.triggerSlip();
-          }
-        }
+        // Telemetry received (pure gaming mode: no random vibrations)
       } else if (msg.type === "PONG") {
         const now = performance.now();
         this.rtt = Math.round(now - msg.ts);
