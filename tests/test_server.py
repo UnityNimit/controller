@@ -172,3 +172,54 @@ def test_mobile_client_assets_and_integrity():
 
     asyncio.run(_test())
 
+
+def test_layout2_and_dual_layout_switching_assets():
+    async def _test():
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=8104,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+
+        class MockRequest:
+            def __init__(self, path: str):
+                self.path = path
+                self.headers = {"host": "127.0.0.1:8104"}
+
+        # 1. Test layout2 elements in index.html
+        resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
+        assert resp_index.status_code == 200
+        text = resp_index.body.decode("utf-8")
+        assert "layout2-wrapper" in text
+        assert "layout2-frame" in text
+        assert "l2-btn-settings-logo" in text
+        assert "l2-touchpad-gyro" in text
+        assert "l2-touchpad-divider-line" in text
+        assert "l2-left-stick-anchor" in text
+        assert "l2-right-stick-anchor" in text
+
+        # 2. Test layout2 styles in cockpit.css
+        resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
+        assert resp_css.status_code == 200
+        css_text = resp_css.body.decode("utf-8")
+        assert "layout-2-wrapper" in css_text
+        assert "controller-layout2" in css_text
+        assert "l2-left-stick-anchor" in css_text
+
+        # 3. Test layout switching methods in cockpit.js
+        resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
+        assert resp_js.status_code == 200
+        js_text = resp_js.body.decode("utf-8")
+        assert "switchLayout" in js_text
+        assert "updateLayoutScaling" in js_text
+
+        # 4. Test Layout 2 SVG assets are served successfully
+        for asset in ["Middle_icon.svg", "LT_LB_containers.svg", "touchpad_body.svg", "Left_joystick.svg"]:
+            resp_asset = await server._handle_http_request(None, MockRequest(f"/assets/{asset}"))
+            assert resp_asset.status_code == 200
+            assert len(resp_asset.body) > 50
+
+    asyncio.run(_test())
+
+

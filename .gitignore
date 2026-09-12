@@ -51,6 +51,12 @@ frontend/dist/
 # Binaries & Archives
 *.exe
 *.zip
+*.rar
+*.7z
+*.tar
+*.gz
+dist/
+build/
 
 # OS Specific
 .DS_Store

@@ -20,6 +20,22 @@ else:
     BASE_DIR = Path(__file__).resolve().parent
     BUNDLE_DIR = BASE_DIR
 
+# Fast-path CLI argument checks before importing heavy server/GUI dependencies
+if any(arg in sys.argv for arg in ("--version", "-v", "-V")):
+    print("Controller v1.0.0")
+    sys.exit(0)
+
+if any(arg in sys.argv for arg in ("--help", "-h", "/?")):
+    print("Controller v1.0.0 - High-Performance Mobile Gamepad Server\n")
+    print("Usage:")
+    print("  Controller.exe [options]\n")
+    print("Options:")
+    print("  -v, --version    Show application version and exit")
+    print("  -h, --help       Show this help message and exit")
+    print("  --headless       Run gateway server without GUI")
+    print("  --no-gui         Alias for --headless")
+    sys.exit(0)
+
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BUNDLE_DIR))
 

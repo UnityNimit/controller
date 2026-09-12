@@ -1,0 +1,344 @@
+/* ==========================================================================
+   MOBILE GAME CONTROLLER - PIXEL-PERFECT STYLESHEET
+   Master Canvas: 2048px × 868px
+   Reference Source: assets/controller_reference.svg (3375 × 1431 px)
+   Scale: X = 2048/3375 (~0.606815), Y = 868/1431 (~0.606569)
+   ========================================================================== */
+
+/* --- Reset & Page Layout --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    background-color: #050505;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #050505;
+    min-width: fit-content;
+    min-height: 100vh;
+    display: flex;
+    justify-content: safe center;
+    align-items: safe center;
+    overflow: auto;
+}
+
+/* --- Root Controller Canvas (Master Coordinate System: 2048 × 868) --- */
+.controller {
+    position: relative;
+    width: 2048px;
+    height: 868px;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: #000;
+}
+
+.controller img {
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   COMPONENT POSITIONING
+   Every component has independently controllable:
+   - left
+   - top
+   - width
+   - height
+   ========================================================================== */
+
+/* --- LT & LB Containers (Left Triggers & Bumpers) --- */
+.lt-lb-containers {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 970.3px;
+    height: 408.8px;
+    z-index: 1;
+}
+
+/* --- RT & RB Containers (Right Triggers & Bumpers) --- */
+.rt-rb-containers {
+    position: absolute;
+    left: 1078.3px;
+    top: 0px;
+    width: 969.7px;
+    height: 408.8px;
+    z-index: 1;
+}
+
+/* --- Back Button Container --- */
+.back-container {
+    position: absolute;
+    left: 417.8px;
+    top: 216.5px;
+    width: 332.9px;
+    height: 192.3px;
+    z-index: 1;
+}
+
+/* --- Start Button Container --- */
+.start-container {
+    position: absolute;
+    left: 1302.8px;
+    top: 216.5px;
+    width: 332.9px;
+    height: 192.3px;
+    z-index: 1;
+}
+
+/* --- Touchpad Body --- */
+.touchpad-body {
+    position: absolute;
+    left: 754.9px;
+    top: 250.5px;
+    width: 546.7px;
+    height: 312.4px;
+    z-index: 1;
+}
+
+/* --- Touchpad Divider Line --- */
+.touchpad-divider-line {
+    position: absolute;
+    left: 729.6px;
+    top: 422.1px;
+    width: 596.1px;
+    height: 73.0px;
+    z-index: 2;
+}
+
+/* ==========================================================================
+   D-PAD / LEFT VERTICAL BUTTONS
+   ========================================================================== */
+
+/* --- D-Pad Top Button --- */
+.dpad-top {
+    position: absolute;
+    left: 561.3px;
+    top: 382.7px;
+    width: 188.1px;
+    height: 188.0px;
+    z-index: 1;
+}
+
+/* --- D-Pad Middle Button --- */
+.dpad-mid {
+    position: absolute;
+    left: 561.3px;
+    top: 527.1px;
+    width: 188.1px;
+    height: 188.0px;
+    z-index: 1;
+}
+
+/* --- D-Pad Bottom Button --- */
+.dpad-bot {
+    position: absolute;
+    left: 561.3px;
+    top: 675.7px;
+    width: 188.1px;
+    height: 188.0px;
+    z-index: 1;
+}
+
+/* ==========================================================================
+   FACE BUTTON CONTAINERS (X, Y, B, A)
+   ========================================================================== */
+
+/* --- X Button Container (Left Face Button) --- */
+.x-container {
+    position: absolute;
+    left: 1294.3px;
+    top: 593.8px;
+    width: 302.8px;
+    height: 274.2px;
+    z-index: 1;
+}
+
+/* --- Y Button Container (Top Face Button) --- */
+.y-container {
+    position: absolute;
+    left: 1575.4px;
+    top: 369.4px;
+    width: 263.9px;
+    height: 256.6px;
+    z-index: 1;
+}
+
+/* --- B Button Container (Right Face Button) --- */
+.b-container {
+    position: absolute;
+    left: 1805.9px;
+    top: 368.2px;
+    width: 234.8px;
+    height: 455.2px;
+    z-index: 1;
+}
+
+/* --- A Button Container (Bottom Face Button) --- */
+.a-container {
+    position: absolute;
+    left: 1566.2px;
+    top: 592.6px;
+    width: 388.8px;
+    height: 275.4px;
+    z-index: 1;
+}
+
+/* ==========================================================================
+   JOYSTICKS
+   ========================================================================== */
+
+/* --- Left Joystick (Analog Stick) --- */
+.left-joystick {
+    position: absolute;
+    left: 271.2px;
+    top: 573.8px;
+    width: 109.7px;
+    height: 109.6px;
+    z-index: 3;
+}
+
+/* --- Right Joystick (Small Analog Stick) --- */
+.right-joystick {
+    position: absolute;
+    left: 1421.8px;
+    top: 467.1px;
+    width: 58.5px;
+    height: 58.5px;
+    z-index: 3;
+}
+
+/* ==========================================================================
+   CENTER ICONS
+   ========================================================================== */
+
+/* --- Center Gamepad Icon --- */
+.gamepad-icon {
+    position: absolute;
+    left: 961.8px;
+    top: 30.9px;
+    width: 122.0px;
+    height: 122.5px;
+    z-index: 3;
+}
+
+/* --- Player 1 (P1) Indicator --- */
+.p1 {
+    position: absolute;
+    left: 1004.9px;
+    top: 176.2px;
+    width: 34.1px;
+    height: 28.2px;
+    z-index: 3;
+}
+
+/* ==========================================================================
+   LABELS & BUTTON LETTERING
+   ========================================================================== */
+
+/* --- Left Trigger (LT) Label --- */
+.lt-label {
+    position: absolute;
+    left: 218.5px;
+    top: 164.9px;
+    width: 81.3px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- Left Bumper (LB) Label --- */
+.lb-label {
+    position: absolute;
+    left: 707.6px;
+    top: 96.4px;
+    width: 87.6px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- Right Trigger (RT) Label --- */
+.rt-label {
+    position: absolute;
+    left: 1742.8px;
+    top: 164.9px;
+    width: 95.2px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- Right Bumper (RB) Label --- */
+.rb-label {
+    position: absolute;
+    left: 1260.4px;
+    top: 96.4px;
+    width: 94.6px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- Back Label --- */
+.back-label {
+    position: absolute;
+    left: 546.2px;
+    top: 295.3px;
+    width: 106.4px;
+    height: 29.0px;
+    z-index: 4;
+}
+
+/* --- Start Label --- */
+.start-label {
+    position: absolute;
+    left: 1393.6px;
+    top: 295.3px;
+    width: 125.5px;
+    height: 29.0px;
+    z-index: 4;
+}
+
+/* --- X Button Label --- */
+.x-label {
+    position: absolute;
+    left: 1417.9px;
+    top: 702.4px;
+    width: 51.0px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- Y Button Label --- */
+.y-label {
+    position: absolute;
+    left: 1674.0px;
+    top: 467.0px;
+    width: 53.1px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- B Button Label --- */
+.b-label {
+    position: absolute;
+    left: 1904.8px;
+    top: 512.5px;
+    width: 43.6px;
+    height: 56.5px;
+    z-index: 4;
+}
+
+/* --- A Button Label --- */
+.a-label {
+    position: absolute;
+    left: 1704.6px;
+    top: 702.4px;
+    width: 54.4px;
+    height: 56.5px;
+    z-index: 4;
+}
