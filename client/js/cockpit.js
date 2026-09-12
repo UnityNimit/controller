@@ -237,6 +237,10 @@ class GamepadClient {
     this.logoHoldTriggered = false;
     this._activeRadiusPopupStick = null;
 
+    // Splash Entrance & Morph Animation State
+    this._isEngaging = false;
+    this._isEngaged = false;
+
     // Motion & Gyro
     this.gyroEnabled = true;
     this.rawAngle = 0;
@@ -372,17 +376,34 @@ class GamepadClient {
 
     this._loadLayout1Config();
 
-    // Splash Screen Tap Handler
+    // Splash Screen Tap Handler (Guaranteed Responsive across Mobile & Desktop)
     if (this.dom.splashScreen) {
       const handleSplash = (e) => {
         if (e) {
-          e.preventDefault();
-          e.stopPropagation();
+          try {
+            e.preventDefault();
+            e.stopPropagation();
+          } catch (_) {}
         }
         this.engage();
       };
+
+      this.dom.splashScreen.addEventListener("pointerdown", handleSplash, { passive: false });
+      this.dom.splashScreen.addEventListener("touchstart", handleSplash, { passive: false });
       this.dom.splashScreen.addEventListener("click", handleSplash);
-      this.dom.splashScreen.addEventListener("touchend", handleSplash);
+
+      if (this.dom.splashBtn) {
+        this.dom.splashBtn.addEventListener("pointerdown", handleSplash, { passive: false });
+        this.dom.splashBtn.addEventListener("touchstart", handleSplash, { passive: false });
+        this.dom.splashBtn.addEventListener("click", handleSplash);
+      }
+
+      const splashImg = this.dom.splashScreen.querySelector(".splash-logo-img");
+      if (splashImg) {
+        splashImg.addEventListener("pointerdown", handleSplash, { passive: false });
+        splashImg.addEventListener("touchstart", handleSplash, { passive: false });
+        splashImg.addEventListener("click", handleSplash);
+      }
     }
 
     // Center Logo in Layout 1 -> Hold (>=600ms) to Customize/Save, Tap (<600ms) to Switch to Layout 2
@@ -644,14 +665,20 @@ class GamepadClient {
   }
 
   async engage() {
-    if (this.dom.splashScreen) {
-      this.dom.splashScreen.classList.add("hidden");
-    }
+    if (this._isEngaging || this._isEngaged) return;
+    this._isEngaging = true;
 
+    // 1. ALWAYS force Layout 1 on launch as requested
+    this.currentLayout = 1;
+    localStorage.setItem("controller_active_layout", "1");
+    this.switchLayout(1, false);
+
+    // 2. Launch smooth logo morph and controls bloom animation
+    this._startMorphAnimation();
+
+    // 3. Concurrently initialize fullscreen, orientation lock, audio, and sensors
     this.toggleFullscreen();
-    await this.lockOrientationLandscape();
-    this.updateLayoutScaling();
-    setTimeout(() => this.updateLayoutScaling(), 100);
+    this.lockOrientationLandscape().catch(() => {});
 
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
       try {
@@ -666,10 +693,99 @@ class GamepadClient {
     } catch (_) {}
 
     this.haptics.initAudio();
-    this.haptics.triggerClick("heavy");
     this._attachMotionSensors();
     this.connect();
     this._startLoop();
+  }
+
+  _startMorphAnimation() {
+    const splashScreen = this.dom.splashScreen;
+    const splashLogo = splashScreen ? splashScreen.querySelector(".splash-logo-img") : null;
+    const frame = this.dom.frame;
+    const targetLogo = document.querySelector("#btn-settings-logo .center-logo-img") || this.dom.btnSettingsLogo;
+
+    if (!splashScreen || !splashLogo) {
+      if (splashScreen) {
+        splashScreen.classList.add("hidden");
+        splashScreen.style.display = "none";
+      }
+      this._isEngaged = true;
+      this._isEngaging = false;
+      return;
+    }
+
+    // Set initial entering state on Layout 1 controls
+    if (frame) {
+      frame.classList.add("layout1-entering");
+      frame.classList.remove("layout1-blooming", "morph-complete");
+      void frame.offsetHeight; // Force layout reflow
+    }
+
+    // Measure viewport coordinates
+    const splashRect = splashLogo.getBoundingClientRect();
+    const targetRect = targetLogo ? targetLogo.getBoundingClientRect() : null;
+
+    let deltaX = 0;
+    let deltaY = 0;
+    let scale = 0.354;
+    let rotation = 0;
+
+    if (splashRect.width > 0 && targetRect && targetRect.width > 0) {
+      const splashCenterX = splashRect.left + splashRect.width / 2;
+      const splashCenterY = splashRect.top + splashRect.height / 2;
+      const targetCenterX = targetRect.left + targetRect.width / 2;
+      const targetCenterY = targetRect.top + targetRect.height / 2;
+
+      deltaX = targetCenterX - splashCenterX;
+      deltaY = targetCenterY - splashCenterY;
+      scale = targetRect.width / splashRect.width;
+    } else {
+      deltaX = 0;
+      deltaY = -window.innerHeight * 0.38;
+      scale = 0.354;
+    }
+
+    if (this.isRotated) {
+      rotation = 90;
+    }
+
+    // Tactile feedback at start of glide
+    this.haptics.triggerClick("medium");
+
+    // Start 60fps hardware-accelerated morph transition
+    requestAnimationFrame(() => {
+      splashScreen.classList.add("splash-morphing");
+      splashLogo.classList.add("morphing");
+      splashLogo.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scale}) rotate(${rotation}deg)`;
+      splashLogo.style.filter = "drop-shadow(0 0 10px rgba(255, 255, 255, 0.75))";
+
+      if (frame) {
+        frame.classList.add("layout1-blooming");
+      }
+    });
+
+    // Touchdown sequence when logo lands in Layout 1 slot
+    setTimeout(() => {
+      if (frame) {
+        frame.classList.add("morph-complete");
+      }
+
+      if (splashScreen) {
+        splashScreen.classList.add("hidden");
+        splashScreen.style.display = "none";
+      }
+
+      setTimeout(() => {
+        if (frame) {
+          frame.classList.remove("layout1-entering", "layout1-blooming", "morph-complete");
+        }
+      }, 60);
+
+      this.haptics.triggerClick("heavy");
+      this.updateLayoutScaling();
+      this._isEngaged = true;
+      this._isEngaging = false;
+    }, 650);
   }
 
   _attachMotionSensors() {

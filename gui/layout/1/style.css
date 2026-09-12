@@ -53,13 +53,20 @@ html, body {
   justify-content: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
+  pointer-events: auto;
+  transition: background-color 0.55s ease, opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
+}
+
+.splash-screen.splash-morphing {
+  background-color: transparent !important;
+  pointer-events: none !important;
 }
 
 .splash-screen.hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+  display: none !important;
 }
 
 .splash-logo-container {
@@ -67,6 +74,9 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
 }
 
 .splash-logo-img {
@@ -74,8 +84,20 @@ html, body {
   height: auto;
   max-width: 35vw;
   object-fit: contain;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 45px rgba(255, 255, 255, 0.35));
   animation: splash-glow-pulse 2.6s ease-in-out infinite alternate;
+  will-change: transform, filter, opacity;
+}
+
+.splash-logo-img.morphing {
+  animation: none !important;
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.65s ease;
+  pointer-events: none;
 }
 
 @keyframes splash-glow-pulse {
@@ -87,6 +109,61 @@ html, body {
     transform: scale(1.02);
     filter: drop-shadow(0 0 28px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 60px rgba(255, 255, 255, 0.5));
   }
+}
+
+/* ==========================================================================
+   1B. LAYOUT 1 MORPH BLOOM ENTRANCE ANIMATION
+   ========================================================================== */
+#gamepad-frame.layout1-entering .circle-btn,
+#gamepad-frame.layout1-entering .circle-gyro,
+#gamepad-frame.layout1-entering .gamepad-module,
+#gamepad-frame.layout1-entering #live-ping-display {
+  opacity: 0;
+  transform: scale(0.86);
+  pointer-events: none;
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.6s ease;
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming .circle-btn,
+#gamepad-frame.layout1-entering.layout1-blooming .circle-gyro,
+#gamepad-frame.layout1-entering.layout1-blooming .gamepad-module,
+#gamepad-frame.layout1-entering.layout1-blooming #live-ping-display {
+  opacity: 1;
+  transform: scale(1);
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming .mod-trigger,
+#gamepad-frame.layout1-entering.layout1-blooming .mod-bumper {
+  transition-delay: 0.05s;
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming .mod-menu,
+#gamepad-frame.layout1-entering.layout1-blooming .mod-gyro {
+  transition-delay: 0.10s;
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming .mod-left-wing,
+#gamepad-frame.layout1-entering.layout1-blooming .mod-right-wing {
+  transition-delay: 0.15s;
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming #live-ping-display {
+  transition-delay: 0.20s;
+}
+
+#gamepad-frame.layout1-entering #btn-settings-logo,
+#gamepad-frame.layout1-entering .center-logo-img,
+#gamepad-frame.layout1-entering .logo-hold-ring {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#gamepad-frame.layout1-entering.layout1-blooming.morph-complete #btn-settings-logo,
+#gamepad-frame.layout1-entering.layout1-blooming.morph-complete .center-logo-img,
+#gamepad-frame.layout1-entering.layout1-blooming.morph-complete .logo-hold-ring {
+  opacity: 1;
 }
 
 /* ==========================================================================
