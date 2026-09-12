@@ -226,6 +226,16 @@ class GamepadClient {
 
     // Active Layout Mode (1 = Circular Monochromatic, 2 = Tactical Figma Master)
     this.currentLayout = parseInt(localStorage.getItem("controller_active_layout") || "1", 10);
+    this.layout2Scale = 1.0;
+
+    // Layout 1 Customization Engine
+    this.isCustomizingLayout1 = false;
+    this.customLayout1Config = {};
+    this.customStickRadius = { left: 40, right: 40 };
+    this.logoHoldTimer = null;
+    this.logoHoldStart = 0;
+    this.logoHoldTriggered = false;
+    this._activeRadiusPopupStick = null;
 
     // Motion & Gyro
     this.gyroEnabled = true;
@@ -352,6 +362,16 @@ class GamepadClient {
       pingDot: document.getElementById("ping-dot")
     };
 
+    this.dom.logoHoldRing = document.getElementById("logo-hold-ring");
+    this.dom.logoHoldCircle = document.getElementById("logo-hold-circle");
+    this.dom.l1CustomHud = document.getElementById("l1-custom-hud");
+    this.dom.l1RadiusPopup = document.getElementById("l1-radius-popup");
+    this.dom.l1RadiusSlider = document.getElementById("l1-radius-slider");
+    this.dom.l1RadiusVal = document.getElementById("l1-radius-val");
+    this.dom.l1RadiusTitle = document.getElementById("l1-radius-title");
+
+    this._loadLayout1Config();
+
     // Splash Screen Tap Handler
     if (this.dom.splashScreen) {
       const handleSplash = (e) => {
@@ -365,19 +385,90 @@ class GamepadClient {
       this.dom.splashScreen.addEventListener("touchend", handleSplash);
     }
 
-    // Center Logo in Layout 1 -> Tap to switch to Layout 2
+    // Center Logo in Layout 1 -> Hold (>=600ms) to Customize/Save, Tap (<600ms) to Switch to Layout 2
     if (this.dom.btnSettingsLogo) {
-      let lastL1Tap = 0;
-      const handleL1Tap = (e) => {
-        const now = performance.now();
-        if (now - lastL1Tap < 250) return;
-        lastL1Tap = now;
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        this.switchLayout(2);
+      let holdRaf = null;
+
+      const startHoldAnim = () => {
+        if (!this.dom.logoHoldCircle) return;
+        const startTime = performance.now();
+        const duration = 600;
+        const tick = (now) => {
+          const elapsed = now - startTime;
+          const progress = Math.min(1.0, elapsed / duration);
+          const offset = 176 * (1.0 - progress);
+          if (this.dom.logoHoldCircle) {
+            this.dom.logoHoldCircle.style.strokeDashoffset = offset.toString();
+          }
+          if (progress < 1.0 && this.logoHoldTimer) {
+            holdRaf = requestAnimationFrame(tick);
+          }
+        };
+        holdRaf = requestAnimationFrame(tick);
       };
-      this.dom.btnSettingsLogo.addEventListener("click", handleL1Tap);
-      this.dom.btnSettingsLogo.addEventListener("pointerdown", handleL1Tap);
+
+      const resetHoldAnim = () => {
+        if (holdRaf) {
+          cancelAnimationFrame(holdRaf);
+          holdRaf = null;
+        }
+        if (this.dom.logoHoldCircle) {
+          this.dom.logoHoldCircle.style.strokeDashoffset = "176";
+        }
+      };
+
+      this.dom.btnSettingsLogo.addEventListener("pointerdown", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        this.logoHoldTriggered = false;
+        this.logoHoldStart = performance.now();
+        resetHoldAnim();
+        startHoldAnim();
+
+        clearTimeout(this.logoHoldTimer);
+        this.logoHoldTimer = setTimeout(() => {
+          this.logoHoldTriggered = true;
+          resetHoldAnim();
+          this.toggleCustomizeMode();
+        }, 600);
+      }, { passive: false });
+
+      const handleLogoUp = (e) => {
+        if (this.logoHoldTimer) {
+          clearTimeout(this.logoHoldTimer);
+          this.logoHoldTimer = null;
+        }
+        resetHoldAnim();
+
+        if (this.logoHoldTriggered) {
+          if (e) { e.preventDefault(); e.stopPropagation(); }
+          return;
+        }
+
+        // Quick Tap (< 600ms)
+        const pressDuration = performance.now() - (this.logoHoldStart || 0);
+        if (pressDuration < 600) {
+          if (e) { e.preventDefault(); e.stopPropagation(); }
+          if (!this.isCustomizingLayout1) {
+            this.switchLayout(2);
+          }
+        }
+      };
+
+      this.dom.btnSettingsLogo.addEventListener("pointerup", handleLogoUp);
+      this.dom.btnSettingsLogo.addEventListener("pointercancel", () => {
+        if (this.logoHoldTimer) {
+          clearTimeout(this.logoHoldTimer);
+          this.logoHoldTimer = null;
+        }
+        resetHoldAnim();
+      });
+
+      this.dom.btnSettingsLogo.addEventListener("click", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+      });
     }
+
+    this._initCustomizationHandlers();
 
     // Center Logo in Layout 2 -> Tap to switch to Layout 1
     const l2Logo = document.getElementById("l2-btn-settings-logo");
@@ -861,6 +952,7 @@ class GamepadClient {
     // 3. Multi-Touch Independent Button Engine (Drag/Glide + Full Concurrency)
     // =========================================================================
     const handleButtonPointerDown = (e) => {
+      if (this.isCustomizingLayout1) return;
       if (e.pointerId === this.leftStickPointerId || e.pointerId === this.rightStickPointerId) return;
 
       const targetBtn = this._getButtonAtPoint(e.clientX, e.clientY);
@@ -877,6 +969,7 @@ class GamepadClient {
     };
 
     const handleButtonPointerMove = (e) => {
+      if (this.isCustomizingLayout1) return;
       if (e.pointerId === this.leftStickPointerId) {
         e.preventDefault();
         this._updateLeftStickFromPointer(e.clientX, e.clientY);
@@ -985,7 +1078,7 @@ class GamepadClient {
     const center = this.getGamepadCenter(baseEl);
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
-    const maxRadius = 40;
+    const maxRadius = isL2 ? 65 : (this.customStickRadius ? (this.customStickRadius.left || 40) : 40);
     const dist = Math.hypot(dx, dy);
 
     let visualDx = dx;
@@ -1053,7 +1146,7 @@ class GamepadClient {
     const center = this.getGamepadCenter(baseEl);
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
-    const maxRadius = 40;
+    const maxRadius = isL2 ? 55 : (this.customStickRadius ? (this.customStickRadius.right || 40) : 40);
     const dist = Math.hypot(dx, dy);
 
     if (dist > 5) {
@@ -1188,4 +1281,302 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("orientationchange", () => {
     if (window.gamepadClient) window.gamepadClient.checkOrientation();
   });
-});
+
+  // =========================================================================
+  // LAYOUT 1 CUSTOMIZATION ENGINE (DRAG, RESIZE, JOYSTICK RADIUS & STORAGE)
+  // =========================================================================
+  toggleCustomizeMode() {
+    this.isCustomizingLayout1 = !this.isCustomizingLayout1;
+    this.haptics.triggerClick("heavy");
+
+    const frame = this.dom.frame || document.getElementById("gamepad-frame");
+    if (frame) {
+      frame.classList.toggle("customizing-mode", this.isCustomizingLayout1);
+    }
+
+    if (this.isCustomizingLayout1) {
+      this.haptics.initAudio();
+      this.closeRadiusPopup();
+    } else {
+      this.closeRadiusPopup();
+      this._saveLayout1Config();
+    }
+  }
+
+  _initCustomizationHandlers() {
+    const frame = this.dom.frame || document.getElementById("gamepad-frame");
+    if (!frame) return;
+
+    let activeDrag = null; // { id, el, startX, startY, origDx, origDy, origScale, isResize, moved }
+
+    const getCustomElement = (target) => {
+      if (!target || !target.closest) return null;
+      return target.closest("[data-custom-id]");
+    };
+
+    const getResizeHandle = (target) => {
+      if (!target || !target.closest) return null;
+      return target.closest(".l1-resize-handle");
+    };
+
+    frame.addEventListener("pointerdown", (e) => {
+      if (!this.isCustomizingLayout1) return;
+      if (e.target.closest(".l1-custom-hud") || e.target.closest(".l1-radius-popup") || e.target.closest("#btn-settings-logo")) {
+        return;
+      }
+
+      const resizeHandle = getResizeHandle(e.target);
+      if (resizeHandle) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetId = resizeHandle.dataset.target;
+        const targetEl = document.querySelector(`[data-custom-id="${targetId}"]`);
+        if (!targetEl) return;
+
+        const cfg = this._getElemConfig(targetId);
+        activeDrag = {
+          id: targetId,
+          el: targetEl,
+          startX: e.clientX,
+          startY: e.clientY,
+          origDx: cfg.dx,
+          origDy: cfg.dy,
+          origScale: cfg.s,
+          isResize: true,
+          moved: false
+        };
+        return;
+      }
+
+      const customEl = getCustomElement(e.target);
+      if (customEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetId = customEl.dataset.customId;
+        const cfg = this._getElemConfig(targetId);
+
+        activeDrag = {
+          id: targetId,
+          el: customEl,
+          startX: e.clientX,
+          startY: e.clientY,
+          origDx: cfg.dx,
+          origDy: cfg.dy,
+          origScale: cfg.s,
+          isResize: false,
+          moved: false
+        };
+      }
+    }, { passive: false });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!this.isCustomizingLayout1 || !activeDrag) return;
+      e.preventDefault();
+
+      const dx = e.clientX - activeDrag.startX;
+      const dy = e.clientY - activeDrag.startY;
+      if (Math.hypot(dx, dy) > 6) {
+        activeDrag.moved = true;
+      }
+
+      if (activeDrag.isResize) {
+        const delta = (dx + dy) / 2;
+        const scaleChange = delta / 110;
+        const newScale = Math.max(0.65, Math.min(1.75, activeDrag.origScale + scaleChange));
+        this._setElemScale(activeDrag.id, newScale);
+      } else {
+        const newDx = activeDrag.origDx + dx;
+        const newDy = activeDrag.origDy + dy;
+        this._setElemTranslate(activeDrag.id, newDx, newDy);
+      }
+    }, { passive: false });
+
+    window.addEventListener("pointerup", () => {
+      if (!this.isCustomizingLayout1 || !activeDrag) return;
+
+      if (!activeDrag.isResize && !activeDrag.moved) {
+        if (activeDrag.id === "left-stick-anchor") {
+          this.openRadiusPopup("left", activeDrag.el);
+        } else if (activeDrag.id === "right-stick-anchor") {
+          this.openRadiusPopup("right", activeDrag.el);
+        }
+      }
+
+      activeDrag = null;
+    });
+
+    // Joystick Radius Slider Event
+    const slider = document.getElementById("l1-radius-slider");
+    if (slider) {
+      slider.addEventListener("input", (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (this._activeRadiusPopupStick) {
+          this.customStickRadius[this._activeRadiusPopupStick] = val;
+          const valLabel = document.getElementById("l1-radius-val");
+          if (valLabel) valLabel.textContent = `${val}px`;
+
+          const previewRing = document.getElementById(`${this._activeRadiusPopupStick}-stick-radius-preview`);
+          if (previewRing) {
+            previewRing.style.width = `${val * 2}px`;
+            previewRing.style.height = `${val * 2}px`;
+          }
+        }
+      });
+    }
+
+    // Close Button on Radius Slider Popup
+    const closeBtn = document.getElementById("l1-radius-close-btn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        this.closeRadiusPopup();
+      });
+    }
+
+    // Reset Defaults Button
+    const resetBtn = document.getElementById("l1-reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        this.resetLayout1Config();
+      });
+    }
+  }
+
+  openRadiusPopup(stick, anchorEl) {
+    this._activeRadiusPopupStick = stick;
+    const popup = document.getElementById("l1-radius-popup");
+    const title = document.getElementById("l1-radius-title");
+    const valLabel = document.getElementById("l1-radius-val");
+    const slider = document.getElementById("l1-radius-slider");
+    if (!popup || !anchorEl) return;
+
+    const currentR = this.customStickRadius[stick] || 40;
+    if (title) title.textContent = `${stick.toUpperCase()} STICK RADIUS`;
+    if (valLabel) valLabel.textContent = `${currentR}px`;
+    if (slider) slider.value = currentR;
+
+    const rect = anchorEl.getBoundingClientRect();
+    const frameRect = (this.dom.frame || document.getElementById("gamepad-frame")).getBoundingClientRect();
+
+    let top = (rect.top - frameRect.top) - 85;
+    let left = (rect.left - frameRect.left) - 20;
+    if (top < 10) top = (rect.bottom - frameRect.top) + 12;
+    if (left < 10) left = 10;
+    if (left + 220 > frameRect.width) left = Math.max(10, frameRect.width - 230);
+
+    popup.style.top = `${top}px`;
+    popup.style.left = `${left}px`;
+    popup.classList.add("active");
+    this.haptics.triggerClick("normal");
+  }
+
+  closeRadiusPopup() {
+    this._activeRadiusPopupStick = null;
+    const popup = document.getElementById("l1-radius-popup");
+    if (popup) popup.classList.remove("active");
+  }
+
+  _ensureLayout1Config() {
+    if (!this.customLayout1Config) {
+      this.customLayout1Config = {};
+    }
+  }
+
+  _getElemConfig(id) {
+    this._ensureLayout1Config();
+    if (!this.customLayout1Config[id]) {
+      this.customLayout1Config[id] = { dx: 0, dy: 0, s: 1.0 };
+    }
+    return this.customLayout1Config[id];
+  }
+
+  _applyElemTransform(id) {
+    const el = document.querySelector(`[data-custom-id="${id}"]`);
+    if (!el) return;
+    const cfg = this._getElemConfig(id);
+    el.style.transform = `translate(${cfg.dx}px, ${cfg.dy}px) scale(${cfg.s})`;
+  }
+
+  _setElemTranslate(id, dx, dy) {
+    const cfg = this._getElemConfig(id);
+    cfg.dx = Math.round(dx);
+    cfg.dy = Math.round(dy);
+    this._applyElemTransform(id);
+  }
+
+  _setElemScale(id, s) {
+    const cfg = this._getElemConfig(id);
+    cfg.s = parseFloat(s.toFixed(2));
+    this._applyElemTransform(id);
+  }
+
+  _saveLayout1Config() {
+    try {
+      const data = {
+        elements: this.customLayout1Config || {},
+        stickRadius: this.customStickRadius || { left: 40, right: 40 }
+      };
+      localStorage.setItem("controller_layout1_custom_config", JSON.stringify(data));
+      this.haptics.triggerClick("heavy");
+    } catch (_) {}
+  }
+
+  _loadLayout1Config() {
+    try {
+      const raw = localStorage.getItem("controller_layout1_custom_config");
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.elements) {
+          this.customLayout1Config = data.elements;
+          Object.keys(this.customLayout1Config).forEach((id) => {
+            this._applyElemTransform(id);
+          });
+        }
+        if (data.stickRadius) {
+          this.customStickRadius = {
+            left: data.stickRadius.left || 40,
+            right: data.stickRadius.right || 40
+          };
+          const leftRing = document.getElementById("left-stick-radius-preview");
+          if (leftRing) {
+            leftRing.style.width = `${this.customStickRadius.left * 2}px`;
+            leftRing.style.height = `${this.customStickRadius.left * 2}px`;
+          }
+          const rightRing = document.getElementById("right-stick-radius-preview");
+          if (rightRing) {
+            rightRing.style.width = `${this.customStickRadius.right * 2}px`;
+            rightRing.style.height = `${this.customStickRadius.right * 2}px`;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  resetLayout1Config() {
+    try {
+      localStorage.removeItem("controller_layout1_custom_config");
+      this.customLayout1Config = {};
+      this.customStickRadius = { left: 40, right: 40 };
+
+      document.querySelectorAll("[data-custom-id]").forEach((el) => {
+        el.style.transform = "";
+      });
+
+      const leftRing = document.getElementById("left-stick-radius-preview");
+      if (leftRing) {
+        leftRing.style.width = "80px";
+        leftRing.style.height = "80px";
+      }
+      const rightRing = document.getElementById("right-stick-radius-preview");
+      if (rightRing) {
+        rightRing.style.width = "80px";
+        rightRing.style.height = "80px";
+      }
+
+      this.closeRadiusPopup();
+      this.haptics.triggerClick("heavy");
+    } catch (_) {}
+  }
+
+}

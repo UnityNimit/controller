@@ -223,3 +223,57 @@ def test_layout2_and_dual_layout_switching_assets():
     asyncio.run(_test())
 
 
+def test_layout1_customization_system():
+    async def _test():
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=8105,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+
+        class MockRequest:
+            def __init__(self, path: str):
+                self.path = path
+                self.headers = {"host": "127.0.0.1:8105"}
+
+        # 1. Test index.html contains customization HUD, hold ring, and radius slider elements
+        resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
+        assert resp_index.status_code == 200
+        text = resp_index.body.decode("utf-8")
+        assert "logo-hold-ring" in text
+        assert "logo-hold-circle" in text
+        assert "l1-custom-hud" in text
+        assert "l1-reset-btn" in text
+        assert "l1-radius-popup" in text
+        assert "l1-radius-slider" in text
+        assert "left-stick-radius-preview" in text
+        assert "right-stick-radius-preview" in text
+        assert "data-custom-id" in text
+
+        # 2. Test cockpit.css contains customizing-mode styles and cyan variables
+        resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
+        assert resp_css.status_code == 200
+        css_text = resp_css.body.decode("utf-8")
+        assert ".customizing-mode" in css_text
+        assert "--cyan-neon" in css_text
+        assert ".l1-radius-popup" in css_text
+        assert ".l1-resize-handle" in css_text
+        assert ".stick-radius-preview" in css_text
+
+        # 3. Test cockpit.js has customization engine methods
+        resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
+        assert resp_js.status_code == 200
+        js_text = resp_js.body.decode("utf-8")
+        assert "toggleCustomizeMode" in js_text
+        assert "_initCustomizationHandlers" in js_text
+        assert "openRadiusPopup" in js_text
+        assert "closeRadiusPopup" in js_text
+        assert "_saveLayout1Config" in js_text
+        assert "resetLayout1Config" in js_text
+        assert "controller_layout1_custom_config" in js_text
+
+    asyncio.run(_test())
+
+
+

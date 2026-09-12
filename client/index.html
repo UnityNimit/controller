@@ -29,51 +29,56 @@
     <div class="gamepad-frame" id="gamepad-frame">
 
       <!-- TOP ROW: Circular Triggers, Bumpers, and Center Logo -->
-      <button class="circle-btn mod-trigger" id="lt-trigger" data-trigger="LT" title="Left Trigger">
+      <button class="circle-btn mod-trigger" id="lt-trigger" data-trigger="LT" data-custom-id="lt-trigger" title="Left Trigger"><div class="l1-resize-handle" data-target="lt-trigger"></div>
         <span class="btn-text">LT</span>
       </button>
 
-      <button class="circle-btn mod-bumper" id="btn-lb" data-btn="LB" title="Left Bumper">
+      <button class="circle-btn mod-bumper" id="btn-lb" data-btn="LB" data-custom-id="btn-lb" title="Left Bumper"><div class="l1-resize-handle" data-target="btn-lb"></div>
         <span class="btn-text">LB</span>
       </button>
 
       <div class="center-logo-wrap mod-settings-nut">
-        <button class="nut-btn borderless-logo-btn" id="btn-settings-logo" title="Controller">
+        <svg class="logo-hold-ring" id="logo-hold-ring" viewBox="0 0 64 64">
+          <circle class="logo-hold-circle" id="logo-hold-circle" cx="32" cy="32" r="28" />
+        </svg>
+        <button class="nut-btn borderless-logo-btn" id="btn-settings-logo" title="Controller (Hold to Customize Layout)">
           <img src="logo.png" alt="Controller" class="center-logo-img">
         </button>
       </div>
 
-      <button class="circle-btn mod-bumper" id="btn-rb" data-btn="RB" title="Right Bumper">
+      <button class="circle-btn mod-bumper" id="btn-rb" data-btn="RB" data-custom-id="btn-rb" title="Right Bumper"><div class="l1-resize-handle" data-target="btn-rb"></div>
         <span class="btn-text">RB</span>
       </button>
 
-      <button class="circle-btn mod-trigger" id="rt-trigger" data-trigger="RT" title="Right Trigger">
+      <button class="circle-btn mod-trigger" id="rt-trigger" data-trigger="RT" data-custom-id="rt-trigger" title="Right Trigger"><div class="l1-resize-handle" data-target="rt-trigger"></div>
         <span class="btn-text">RT</span>
       </button>
 
       <!-- MID ROW: Circular Back, Circular Gyro Horizon Line HUD, Circular Start -->
-      <button class="circle-btn mod-menu" id="btn-back" data-btn="BACK" title="Back">
+      <button class="circle-btn mod-menu" id="btn-back" data-btn="BACK" data-custom-id="btn-back" title="Back"><div class="l1-resize-handle" data-target="btn-back"></div>
         <span class="btn-text">Back</span>
       </button>
 
-      <div class="circle-gyro mod-gyro" id="mod-gyro" title="Toggle Gyroscope Steering">
+      <div class="circle-gyro mod-gyro" id="mod-gyro" data-custom-id="mod-gyro" title="Toggle Gyroscope Steering"><div class="l1-resize-handle" data-target="mod-gyro"></div>
         <canvas id="gyro-canvas" class="gyro-canvas" style="display:none;"></canvas>
         <div class="gyro-horizon-line" id="gyro-horizon-line"></div>
       </div>
 
-      <button class="circle-btn mod-menu" id="btn-start" data-btn="START" title="Start">
+      <button class="circle-btn mod-menu" id="btn-start" data-btn="START" data-custom-id="btn-start" title="Start"><div class="l1-resize-handle" data-target="btn-start"></div>
         <span class="btn-text">Start</span>
       </button>
 
       <!-- LEFT WING: Circular Left Stick + Circular D-Pad Cross -->
       <div class="gamepad-module mod-left-wing" id="mod-left-wing">
         <!-- Left Stick Anchor & Single Glowing Circle Puck -->
-        <div class="stick-anchor circle-stick-anchor" id="left-stick-anchor">
+        <div class="stick-anchor circle-stick-anchor" id="left-stick-anchor" data-custom-id="left-stick-anchor">
+          <div class="stick-radius-preview" id="left-stick-radius-preview"></div>
           <div class="stick-single-circle red-puck" id="left-stick-puck"></div>
+          <div class="l1-resize-handle" data-target="left-stick-anchor" title="Drag to Resize"></div>
         </div>
 
         <!-- Circular D-Pad Cross -->
-        <div class="dpad-circle-cluster" id="left-dpad-cluster">
+        <div class="dpad-circle-cluster" id="left-dpad-cluster" data-custom-id="left-dpad-cluster"><div class="l1-resize-handle" data-target="left-dpad-cluster"></div>
           <button class="circle-btn dpad-btn" id="dpad-up" data-dir="DPAD_UP" title="D-Pad Up">
             <span class="btn-text">▲</span>
           </button>
@@ -92,7 +97,7 @@
       <!-- RIGHT WING: Circular ABXY Diamond + Circular Right Stick -->
       <div class="gamepad-module mod-right-wing" id="mod-right-wing">
         <!-- Circular ABXY Diamond -->
-        <div class="abxy-circle-cluster" id="right-abxy-cluster">
+        <div class="abxy-circle-cluster" id="right-abxy-cluster" data-custom-id="right-abxy-cluster"><div class="l1-resize-handle" data-target="right-abxy-cluster"></div>
           <button class="circle-btn abxy-btn" id="btn-y" data-btn="Y" title="Y Button">
             <span class="btn-text">Y</span>
           </button>
@@ -108,8 +113,10 @@
         </div>
 
         <!-- Right Stick Anchor & Single Glowing Circle Puck -->
-        <div class="stick-anchor circle-stick-anchor" id="right-stick-anchor">
+        <div class="stick-anchor circle-stick-anchor" id="right-stick-anchor" data-custom-id="right-stick-anchor">
+          <div class="stick-radius-preview" id="right-stick-radius-preview"></div>
           <div class="stick-single-circle red-puck" id="right-stick-puck"></div>
+          <div class="l1-resize-handle" data-target="right-stick-anchor" title="Drag to Resize"></div>
         </div>
       </div>
 
@@ -122,6 +129,27 @@
       <div class="live-ping-display" id="live-ping-display">
         <span id="ping-text">-- ms</span>
         <span style="display:none;">VERSION 1.0.0</span>
+      </div>
+
+      <!-- =====================================================================
+           LAYOUT 1 CUSTOMIZATION HUD & JOYSTICK RADIUS SLIDER
+           ===================================================================== -->
+      <div class="l1-custom-hud" id="l1-custom-hud">
+        <div class="l1-custom-badge"><span class="l1-pulse-dot"></span>CUSTOMIZE MODE</div>
+        <div class="l1-custom-instructions">Drag • Corner to Resize • Tap Stick for Radius</div>
+        <button class="l1-reset-btn" id="l1-reset-btn" type="button" title="Reset Layout to Factory Defaults">Reset</button>
+        <div class="l1-save-cue">HOLD LOGO TO SAVE</div>
+      </div>
+
+      <div class="l1-radius-popup" id="l1-radius-popup">
+        <div class="l1-radius-header">
+          <span class="l1-radius-title" id="l1-radius-title">LEFT STICK RADIUS</span>
+          <span class="l1-radius-val" id="l1-radius-val">40px</span>
+        </div>
+        <div class="l1-radius-slider-wrap">
+          <input type="range" class="l1-radius-slider" id="l1-radius-slider" min="24" max="75" step="1" value="40">
+        </div>
+        <button class="l1-radius-close-btn" id="l1-radius-close-btn" type="button">DONE</button>
       </div>
 
     </div>

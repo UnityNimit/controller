@@ -963,3 +963,320 @@ body.forced-landscape-portrait #controller-app {
   height: 28.2px;
   margin-top: 23px;
 }
+
+
+/* ==========================================================================
+   LAYOUT 1 INTERACTIVE CUSTOMIZATION MODE (ELECTRIC NEON BLUE ARCHITECTURE)
+   ========================================================================== */
+:root {
+  --cyan-neon: #00e5ff;
+  --cyan-glow: rgba(0, 229, 255, 0.75);
+  --cyan-dim: rgba(0, 229, 255, 0.22);
+}
+
+/* Hold Progress Ring around Controller Logo */
+.center-logo-wrap {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+}
+
+.logo-hold-ring {
+  position: absolute;
+  inset: 0;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+  transform: rotate(-90deg);
+  overflow: visible;
+  z-index: 26;
+}
+
+.logo-hold-circle {
+  fill: none;
+  stroke: var(--cyan-neon);
+  stroke-width: 3.5;
+  stroke-dasharray: 176;
+  stroke-dashoffset: 176;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.04s linear;
+  filter: drop-shadow(0 0 8px var(--cyan-neon));
+}
+
+/* Customize Mode Active States */
+.customizing-mode #gamepad-frame {
+  background-image:
+    radial-gradient(circle, rgba(0, 229, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 229, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow: inset 0 0 50px rgba(0, 229, 255, 0.18);
+}
+
+.customizing-mode .circle-btn,
+.customizing-mode .circle-gyro,
+.customizing-mode .circle-stick-anchor,
+.customizing-mode .dpad-circle-cluster,
+.customizing-mode .abxy-circle-cluster {
+  border-color: var(--cyan-neon) !important;
+  box-shadow: 0 0 16px var(--cyan-glow), inset 0 0 12px var(--cyan-dim) !important;
+  cursor: move !important;
+  touch-action: none !important;
+}
+
+.customizing-mode .circle-btn .btn-text {
+  color: var(--cyan-neon) !important;
+  text-shadow: 0 0 10px var(--cyan-glow) !important;
+}
+
+.customizing-mode .stick-single-circle {
+  background: var(--cyan-neon) !important;
+  box-shadow: 0 0 25px var(--cyan-neon), 0 0 50px var(--cyan-glow) !important;
+}
+
+.customizing-mode .l1-element-selected {
+  outline: 2px solid #ffffff !important;
+  box-shadow: 0 0 30px rgba(0, 229, 255, 1), 0 0 60px rgba(0, 229, 255, 0.7) !important;
+  z-index: 50 !important;
+}
+
+/* Corner Resize Handle */
+.l1-resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px var(--cyan-glow);
+  cursor: nwse-resize;
+  z-index: 60;
+  display: none;
+  touch-action: none;
+}
+
+.customizing-mode .l1-resize-handle {
+  display: block;
+}
+
+.customizing-mode .l1-resize-handle:active {
+  transform: scale(1.3);
+  background: #ffffff;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 1);
+}
+
+/* Live Radius Preview Ring inside Joystick Anchors */
+.stick-radius-preview {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px dashed var(--cyan-neon);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.45), inset 0 0 14px rgba(0, 229, 255, 0.15);
+  pointer-events: none;
+  display: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: 80px;
+  height: 80px;
+}
+
+.customizing-mode .stick-radius-preview {
+  display: block;
+  animation: l1-radius-pulse 2s infinite ease-in-out;
+}
+
+@keyframes l1-radius-pulse {
+  0% { opacity: 0.75; transform: translate(-50%, -50%) scale(0.98); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+  100% { opacity: 0.75; transform: translate(-50%, -50%) scale(0.98); }
+}
+
+/* Top Customize Mode HUD Banner */
+.l1-custom-hud {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: rgba(6, 10, 16, 0.92);
+  border: 1.5px solid var(--cyan-neon);
+  border-radius: 30px;
+  padding: 6px 16px;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 80;
+  pointer-events: auto;
+}
+
+.customizing-mode .l1-custom-hud {
+  display: flex;
+}
+
+.l1-custom-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--cyan-neon);
+  letter-spacing: 0.08em;
+}
+
+.l1-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 8px var(--cyan-neon);
+  animation: l1-dot-pulse 1.2s infinite alternate;
+}
+
+@keyframes l1-dot-pulse {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.3); opacity: 1; }
+}
+
+.l1-custom-instructions {
+  font-size: 10px;
+  color: #8b949e;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.l1-reset-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.l1-reset-btn:hover, .l1-reset-btn:active {
+  background: rgba(255, 75, 75, 0.25);
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+
+.l1-save-cue {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--cyan-neon);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Minimalist Joystick Dragzone Radius Slider Popup */
+.l1-radius-popup {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: rgba(8, 12, 18, 0.94);
+  border: 1.5px solid var(--cyan-neon);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 229, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 100;
+  min-width: 200px;
+  pointer-events: auto;
+}
+
+.l1-radius-popup.active {
+  display: flex;
+  animation: l1-pop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.l1-radius-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.l1-radius-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--cyan-neon);
+  letter-spacing: 0.06em;
+}
+
+.l1-radius-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.l1-radius-slider-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.l1-radius-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  cursor: pointer;
+}
+
+.l1-radius-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 10px var(--cyan-neon);
+  cursor: pointer;
+}
+
+.l1-radius-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cyan-neon);
+  box-shadow: 0 0 10px var(--cyan-neon);
+  cursor: pointer;
+  border: none;
+}
+
+.l1-radius-close-btn {
+  align-self: flex-end;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid var(--cyan-neon);
+  color: var(--cyan-neon);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.l1-radius-close-btn:hover, .l1-radius-close-btn:active {
+  background: var(--cyan-neon);
+  color: #000000;
+}

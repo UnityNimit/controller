@@ -20,6 +20,9 @@
       </button>
 
       <div class="center-logo-wrap mod-settings-nut">
+        <svg class="logo-hold-ring" id="logo-hold-ring" viewBox="0 0 64 64">
+          <circle class="logo-hold-circle" id="logo-hold-circle" cx="32" cy="32" r="28" />
+        </svg>
         <button class="nut-btn borderless-logo-btn" id="btn-settings-logo" title="Switch to Layout 2">
           <img src="logo.png" alt="Controller" class="center-logo-img">
         </button>
@@ -49,7 +52,9 @@
       <!-- LEFT WING: Circular Left Stick + Circular D-Pad Cross -->
       <div class="gamepad-module mod-left-wing" id="mod-left-wing">
         <div class="stick-anchor circle-stick-anchor" id="left-stick-anchor">
+          <div class="stick-radius-preview" id="left-stick-radius-preview"></div>
           <div class="stick-single-circle red-puck" id="left-stick-puck"></div>
+          <div class="l1-resize-handle" data-target="left-stick-anchor"></div>
         </div>
 
         <div class="dpad-circle-cluster" id="left-dpad-cluster">
@@ -86,7 +91,9 @@
         </div>
 
         <div class="stick-anchor circle-stick-anchor" id="right-stick-anchor">
+          <div class="stick-radius-preview" id="right-stick-radius-preview"></div>
           <div class="stick-single-circle red-puck" id="right-stick-puck"></div>
+          <div class="l1-resize-handle" data-target="right-stick-anchor"></div>
         </div>
       </div>
 
@@ -95,6 +102,25 @@
         <span id="ping-text">-- ms</span>
       </div>
 
+
+      <!-- LAYOUT 1 CUSTOMIZATION HUD & JOYSTICK RADIUS SLIDER -->
+      <div class="l1-custom-hud" id="l1-custom-hud">
+        <div class="l1-custom-badge"><span class="l1-pulse-dot"></span>CUSTOMIZE MODE</div>
+        <div class="l1-custom-instructions">Drag • Corner to Resize • Tap Stick for Radius</div>
+        <button class="l1-reset-btn" id="l1-reset-btn" type="button">Reset</button>
+        <div class="l1-save-cue">HOLD LOGO TO SAVE</div>
+      </div>
+
+      <div class="l1-radius-popup" id="l1-radius-popup">
+        <div class="l1-radius-header">
+          <span class="l1-radius-title" id="l1-radius-title">LEFT STICK RADIUS</span>
+          <span class="l1-radius-val" id="l1-radius-val">40px</span>
+        </div>
+        <div class="l1-radius-slider-wrap">
+          <input type="range" class="l1-radius-slider" id="l1-radius-slider" min="24" max="75" step="1" value="40">
+        </div>
+        <button class="l1-radius-close-btn" id="l1-radius-close-btn" type="button">DONE</button>
+      </div>
     </div>
   </div>
 </body>
