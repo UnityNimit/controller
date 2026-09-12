@@ -1,0 +1,104 @@
+/* ==========================================================================
+   PROJECT CONTROLLER — CORE VIEWPORT RESET & OBSIDIAN FOUNDATION
+   File: src/index.css
+   Eliminates all Vite desktop constraints, rubber-banding, and ghost clicks.
+   ========================================================================== */
+
+:root {
+  /* Obsidian Monochromatic Palette */
+  --obsidian-black: #000000;
+  --obsidian-surface: #060709;
+  --obsidian-panel: #0a0c10;
+  --obsidian-panel-raised: #0f1217;
+  --obsidian-glass: rgba(15, 18, 23, 0.85);
+
+  /* Laser Line Weights & Borders */
+  --border-hairline: 1px solid rgba(255, 255, 255, 0.12);
+  --border-focus: 1px solid rgba(255, 255, 255, 0.35);
+  --border-active: 1.5px solid #ffffff;
+
+  /* Typography & Accents */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --text-muted: #525866;
+
+  /* Glow & Feedback */
+  --glow-subtle: 0 0 12px rgba(255, 255, 255, 0.15);
+  --glow-active: 0 0 20px rgba(255, 255, 255, 0.5);
+
+  /* Typefaces */
+  --font-hud: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* Touch Calibration */
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Global Reset: Prevent Selection, Zooming & Elastic Overscroll */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  height: -webkit-fill-available;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--obsidian-black);
+  color: var(--text-primary);
+  font-family: var(--font-hud);
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overscroll-behavior: none;
+}
+
+/* Eradicate Vite's 1126px Desktop Wrapper Constraint */
+#root {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--obsidian-black);
+}
+
+/* Remove default button & input styling */
+button {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+canvas {
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}

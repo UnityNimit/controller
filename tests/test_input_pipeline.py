@@ -43,6 +43,56 @@ def test_input_slot_allocation():
     assert s_new == 1
 
 
+def test_input_slot_swapping_and_persistent_leasing():
+    mgr = InputManager(force_mock=True, max_players=4)
+
+    # Allocate P1 and P2
+    p1 = mgr.allocate_slot("client_p1")
+    p2 = mgr.allocate_slot("client_p2")
+    assert p1 == 0 and p2 == 1
+
+    # Send stick values to both
+    mgr.dispatch("client_p1", {"stick_x": 10000, "stick_y": 0, "throttle": 0, "brake": 0, "buttons": {}})
+    mgr.dispatch("client_p2", {"stick_x": -10000, "stick_y": 0, "throttle": 0, "brake": 0, "buttons": {}})
+
+    assert mgr.controllers[0].steering == 10000
+    assert mgr.controllers[1].steering == -10000
+
+    # Swap P1 and P2 slots atomically
+    res = mgr.swap_slots(0, 1)
+    assert res is not None
+    client_a, client_b = res
+    assert client_a == "client_p1" and client_b == "client_p2"
+
+    # Now client_p1 is slot 1, client_p2 is slot 0
+    assert mgr.get_slot("client_p1") == 1
+    assert mgr.get_slot("client_p2") == 0
+
+    # Disconnect client_p1 and reconnect with preferred_slot=1
+    mgr.release_slot("client_p1")
+    reconnected_slot = mgr.allocate_slot("client_p1", preferred_slot=1)
+    assert reconnected_slot == 1
+
+
+def test_input_watchdog_reset():
+    import time
+    mgr = InputManager(force_mock=True, max_players=2)
+    mgr.allocate_slot("client_afk")
+
+    # Client pushed stick and then froze/dropped connection without releasing
+    mgr.dispatch("client_afk", {"stick_x": 20000, "stick_y": 15000, "throttle": 200, "brake": 0, "buttons": {}})
+    assert mgr.controllers[0].steering == 20000
+    assert mgr.controllers[0].throttle == 200
+
+    # Sleep past watchdog threshold
+    time.sleep(0.06)
+    mgr.tick_watchdog(timeout_sec=0.04)
+
+    # Controller should have been reset to neutral automatically!
+    assert mgr.controllers[0].steering == 0
+    assert mgr.controllers[0].throttle == 0
+
+
 def test_input_dispatch_to_mock_gamepad():
     mgr = InputManager(force_mock=True, max_players=2)
     mgr.allocate_slot("client_1")

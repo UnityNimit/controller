@@ -1,13 +1,22 @@
 """
-Project Controller - Global Configuration & Parameter Presets
+Controller - Global Configuration & Parameter Presets
 High-Performance Cyber-Physical Teleoperation Framework
 """
 
+import sys
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+APP_NAME: str = "Controller"
+APP_VERSION: str = "1.0.0"
+
+if getattr(sys, 'frozen', False):
+    BUNDLE_DIR = Path(sys._MEIPASS)
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent.parent
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
 @dataclass
 class NetworkConfig:
@@ -59,14 +68,14 @@ class SecurityConfig:
     # Handshake expiration timeout in seconds
     HANDSHAKE_TIMEOUT_SEC: float = 3.0
     
-    # Anomaly Firewall: Max allowed client packet frequency (Hz)
-    MAX_PACKET_RATE_HZ: float = 120.0
+    # Anomaly Firewall: Max allowed client packet frequency (Hz) - Unconstrained 1000Hz peak
+    MAX_PACKET_RATE_HZ: float = 1000.0
     
-    # Anomaly Firewall: Minimum valid packet inter-arrival time (seconds)
-    MIN_INTER_ARRIVAL_SEC: float = 0.003  # ~333 Hz burst ceiling
+    # Anomaly Firewall: Minimum valid packet inter-arrival time (seconds) - 0.1ms ceiling
+    MIN_INTER_ARRIVAL_SEC: float = 0.0001
     
     # Maximum consecutive timing violations before dropping / blacklisting client
-    MAX_ANOMALY_BURSTS: int = 15
+    MAX_ANOMALY_BURSTS: int = 50
 
 
 @dataclass

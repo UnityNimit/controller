@@ -3,14 +3,20 @@
 
 $ErrorActionPreference = "Stop"
 
-# Find python site-packages bundled ViGEm MSI
-$pythonPath = (Get-Command python).Source
-$sitePackages = python -c "import site; print(site.getsitepackages()[0])"
-$msiPath = Join-Path $sitePackages "vgamepad\win\vigem\install\x64\ViGEmBusSetup_x64.msi"
+$localMsi = Join-Path $PSScriptRoot "ViGEmBusSetup_x64.msi"
+if (Test-Path $localMsi) {
+    $msiPath = $localMsi
+} else {
+    try {
+        $sitePackages = python -c "import site; print(site.getsitepackages()[0])" 2>$null
+        $msiPath = Join-Path $sitePackages "vgamepad\win\vigem\install\x64\ViGEmBusSetup_x64.msi"
+    } catch {
+        $msiPath = ""
+    }
+}
 
 if (-not (Test-Path $msiPath)) {
-    Write-Host "[!] Could not locate bundled MSI at: $msiPath" -ForegroundColor Red
-    Write-Host "[*] Downloading official ViGEmBus v1.17.333 installer..." -ForegroundColor Yellow
+    Write-Host "[*] Downloading official ViGEmBus installer..." -ForegroundColor Yellow
     $downloadUrl = "https://github.com/ViGEm/ViGEmBus/releases/download/setup-v1.17.333/ViGEmBusSetup_x64.msi"
     $msiPath = Join-Path $PSScriptRoot "ViGEmBusSetup_x64.msi"
     Invoke-WebRequest -Uri $downloadUrl -OutFile $msiPath

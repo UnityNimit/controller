@@ -5,7 +5,7 @@
 
 export class HapticEngine {
   constructor() {
-    this.hasVibration = "vibrate" in navigator;
+    this.hasVibration = typeof navigator !== 'undefined' && "vibrate" in navigator;
     this.lastSlipTime = 0;
     this.lastImpactTime = 0;
     this.lastRedlineTime = 0;
@@ -14,13 +14,11 @@ export class HapticEngine {
     this.analyser = null;
     this.audioInitialized = false;
     this.pulseEnergy = 0.0;
+    this.enabled = true;
   }
 
-  /**
-   * Initializes Web Audio context on first user interaction for sub-bass tactile resonance.
-   */
   initAudio() {
-    if (!this.audioCtx) {
+    if (!this.audioCtx && typeof window !== 'undefined') {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (AudioContextClass) {
         this.audioCtx = new AudioContextClass();
@@ -36,11 +34,8 @@ export class HapticEngine {
     }
   }
 
-  /**
-   * Sub-bass acoustic resonance transducer (50Hz - 70Hz low-frequency punch).
-   * Makes the phone physically vibrate in hand even when physical vibro-motor is limited.
-   */
   playTactileSubBass(freq = 55, durationSec = 0.08, gainVal = 0.25) {
+    if (!this.enabled) return;
     this.pulseEnergy = Math.min(1.0, this.pulseEnergy + 0.4);
     if (!this.audioCtx || this.audioCtx.state !== "running") return;
     try {
@@ -66,12 +61,8 @@ export class HapticEngine {
     } catch (_) {}
   }
 
-  /**
-   * Decodes live XInput Force Feedback Rumble packets from PC games (e.g. FIFA, Rocket League, Forza, GTA).
-   * @param {number} largeMotor - 0 to 255 (Heavy counterweight: crashes, collisions, tackles, post hits)
-   * @param {number} smallMotor - 0 to 255 (Light counterweight: engine purr, tire slip, revs, grass/curb)
-   */
   handleRumble(largeMotor, smallMotor) {
+    if (!this.enabled) return;
     const now = performance.now();
     if (now - this.lastRumbleTime < 45) return;
     this.lastRumbleTime = now;
@@ -79,13 +70,10 @@ export class HapticEngine {
     const large = Math.max(0, Math.min(255, parseInt(largeMotor) || 0));
     const small = Math.max(0, Math.min(255, parseInt(smallMotor) || 0));
 
-    if (large === 0 && small === 0) {
-      return;
-    }
+    if (large === 0 && small === 0) return;
 
     this.pulseEnergy = Math.min(1.0, this.pulseEnergy + Math.max(large, small) / 255.0);
 
-    // Both motors intense: Catastrophic crash / heavy tackle / explosion
     if (large > 160 && small > 160) {
       if (this.hasVibration) {
         navigator.vibrate([70, 20, 110, 25, 50]);
@@ -94,7 +82,6 @@ export class HapticEngine {
       return;
     }
 
-    // Heavy Motor Dominant: Collisions, goal posts, tackles, off-road impacts
     if (large > 0) {
       const dur = Math.max(25, Math.round((large / 255) * 120));
       if (this.hasVibration) {
@@ -110,7 +97,6 @@ export class HapticEngine {
       return;
     }
 
-    // Light Motor Dominant: Engine vibration, tire slip, surface friction, ball touches
     if (small > 0) {
       const dur = Math.max(12, Math.round((small / 255) * 45));
       if (this.hasVibration) {
@@ -119,10 +105,8 @@ export class HapticEngine {
     }
   }
 
-  /**
-   * High-Frequency Buzz for Tire Slip / Understeer Loss of Grip
-   */
   triggerSlip() {
+    if (!this.enabled) return;
     this.pulseEnergy = Math.min(1.0, this.pulseEnergy + 0.4);
     if (!this.hasVibration) return;
     const now = performance.now();
@@ -132,10 +116,8 @@ export class HapticEngine {
     }
   }
 
-  /**
-   * Heavy Pulse Waveform for Vehicle Collision / Barrier Impact Spike
-   */
   triggerImpact() {
+    if (!this.enabled) return;
     this.pulseEnergy = 1.0;
     const now = performance.now();
     if (now - this.lastImpactTime > 400) {
@@ -147,10 +129,8 @@ export class HapticEngine {
     }
   }
 
-  /**
-   * Tactile Tick for Redline Engine RPM Peak
-   */
   triggerRedline() {
+    if (!this.enabled) return;
     this.pulseEnergy = Math.min(1.0, this.pulseEnergy + 0.6);
     if (!this.hasVibration) return;
     const now = performance.now();
@@ -160,11 +140,8 @@ export class HapticEngine {
     }
   }
 
-  /**
-   * Button & D-Pad Press Haptic Feedback
-   */
   triggerClick(style = "normal") {
-    if (!this.hasVibration) return;
+    if (!this.enabled || !this.hasVibration) return;
     if (style === "heavy") {
       navigator.vibrate(28);
     } else if (style === "dpad") {
@@ -180,11 +157,6 @@ export class HapticEngine {
     this.triggerClick("dpad");
   }
 
-  /**
-   * Retrieves live FFT frequency spectrum data and decays pulse energy.
-   * @param {Uint8Array} array - Target frequency buffer.
-   * @returns {number} Current vibration pulse energy (0.0 to 1.0)
-   */
   getFrequencyData(array) {
     if (this.analyser && this.audioInitialized) {
       this.analyser.getByteFrequencyData(array);
@@ -194,55 +166,5 @@ export class HapticEngine {
     const energy = this.pulseEnergy;
     this.pulseEnergy = Math.max(0.0, this.pulseEnergy * 0.92 - 0.01);
     return energy;
-  }
-}
-
-
-export class ShiftToneSynthesizer {
-  constructor() {
-    this.audioCtx = null;
-    this.lastToneTime = 0;
-    this.cooldownMs = 400;
-  }
-
-  initAudio() {
-    if (!this.audioCtx) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        this.audioCtx = new AudioContextClass();
-      }
-    }
-    if (this.audioCtx && this.audioCtx.state === "suspended") {
-      this.audioCtx.resume();
-    }
-  }
-
-  /**
-   * Generates a high-pitch F1/GT3 cockpit shift beep at engine redline.
-   */
-  beep(freq = 1750, duration = 0.05) {
-    if (!this.audioCtx) return;
-    const now = performance.now();
-    if (now - this.lastToneTime < this.cooldownMs) return;
-    this.lastToneTime = now;
-
-    try {
-      const osc = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
-
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, this.audioCtx.currentTime);
-
-      gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + duration);
-
-      osc.connect(gain);
-      gain.connect(this.audioCtx.destination);
-
-      osc.start();
-      osc.stop(this.audioCtx.currentTime + duration);
-    } catch (e) {
-      console.debug("Audio play error", e);
-    }
   }
 }

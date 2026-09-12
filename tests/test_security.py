@@ -81,3 +81,32 @@ def test_anomaly_firewall_sequence_and_rate():
     time.sleep(0.01)
     ok_valid, err_valid = firewall.inspect_packet(client_id, seq=3, client_time=time.time())
     assert ok_valid is True
+
+
+def test_anomaly_firewall_neutral_bypass():
+    # Fast arrival should normally be dropped, but neutral packet must be exempt
+    firewall = AnomalyFirewall(max_rate_hz=50.0, min_inter_arrival_sec=0.02)
+    client_id = "test_player"
+
+    # Packet 1
+    ok1, _ = firewall.inspect_packet(client_id, seq=1, client_time=time.time())
+    assert ok1 is True
+
+    # Immediate neutral packet (0ms later) - must PASS despite inter-arrival violation
+    ok_neutral, reason = firewall.inspect_packet(client_id, seq=2, client_time=time.time(), is_neutral=True)
+    assert ok_neutral is True
+    assert reason is None
+
+
+def test_anomaly_firewall_high_frequency_throughput():
+    # 1000Hz peak rate and 0.1ms inter-arrival
+    firewall = AnomalyFirewall(max_rate_hz=1000.0, min_inter_arrival_sec=0.0001)
+    client_id = "pro_player_1000hz"
+
+    for seq in range(1, 25):
+        time.sleep(0.0002)
+        ok, err = firewall.inspect_packet(client_id, seq=seq, client_time=time.time())
+        assert ok is True
+        assert err is None
+
+

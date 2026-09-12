@@ -139,10 +139,6 @@ class SensorFusionPipeline:
         self.ema_filter = EMAFilter(alpha=ema_alpha)
         self.steering_curve = ExponentialSteeringCurve(gamma=curve_gamma)
         self.jerk_detector = JerkDetector(jerk_threshold_g_s=jerk_threshold)
-        
-        # Filter for gas / brake triggers to prevent step jumps
-        self.throttle_ema = EMAFilter(alpha=0.6)
-        self.brake_ema = EMAFilter(alpha=0.6)
 
     def calibrate_zero(self, current_angle_deg: float) -> None:
         """Sets current physical orientation as the neutral center (0 deg)."""
@@ -172,17 +168,15 @@ class SensorFusionPipeline:
     def process_triggers(self, raw_throttle: float, raw_brake: float) -> Tuple[int, int]:
         """
         Processes normalized throttle and brake inputs [0.0, 1.0].
+        Direct 1:1 mapping with 0ms latency and guaranteed zero cutoff upon release.
         Returns 8-bit XInput trigger bytes [0, 255].
         """
         th = max(0.0, min(1.0, float(raw_throttle)))
         br = max(0.0, min(1.0, float(raw_brake)))
-        
-        th_smooth = self.throttle_ema.filter(th)
-        br_smooth = self.brake_ema.filter(br)
-        
-        th_byte = int(th_smooth * 255)
-        br_byte = int(br_smooth * 255)
-        
+
+        th_byte = int(round(th * 255.0)) if th > 0.001 else 0
+        br_byte = int(round(br * 255.0)) if br > 0.001 else 0
+
         return th_byte, br_byte
 
     def process_acceleration(self, ax: float, ay: float, az: float, timestamp: Optional[float] = None) -> bool:

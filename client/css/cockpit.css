@@ -1,15 +1,21 @@
-/* Project Controller - Legendary Mobile Touch Gamepad */
+/* Project Controller - Pure Minimalist Monochromatic Esports Edition */
 :root {
-  --bg-dark: #060608;
-  --bg-card: rgba(18, 18, 22, 0.75);
-  --bg-card-active: rgba(35, 35, 45, 0.9);
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --border-bright: rgba(255, 255, 255, 0.3);
-  --accent-a: #00ff88;   /* A: Jump (Green) */
-  --accent-b: #ff3344;   /* B: Boost (Crimson) */
-  --accent-x: #2f80ed;   /* X: Powerslide (Azure) */
-  --accent-y: #ffbb00;   /* Y: Ball Cam (Gold) */
-  --accent-cyan: #00ffcc;
+  --bg-black: #000000;
+  --bg-dark: #08090b;
+  --panel-obsidian: #090b0e;
+  --panel-surface: linear-gradient(180deg, #101319 0%, #07080b 100%);
+  --panel-gray: #090b0e;
+  --panel-dark: #050608;
+  --border-white: #ffffff;
+  --border-subtle: rgba(255, 255, 255, 0.3);
+  --border-active: #ffffff;
+  --accent-white: #ffffff;
+  --accent-silver: #8b949e;
+  --text-primary: #ffffff;
+  --text-muted: #8b949e;
+  --text-dark: #050608;
+  --text-white: #ffffff;
+  --font-hud: "SF Pro Display", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
 }
 
@@ -29,457 +35,957 @@ html, body {
   height: 100dvh;
   height: -webkit-fill-available;
   overflow: hidden;
-  background-color: var(--bg-dark);
-  color: #f0f0f0;
-  font-family: var(--font-mono);
+  background-color: var(--bg-black);
+  color: var(--text-white);
+  font-family: var(--font-hud);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 #controller-app {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  position: relative;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
   overflow: hidden;
+  background: var(--bg-black);
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* ==========================================================================
-   1. FLOATING MINIMALIST STATUS BAR (NO BULKY TOP BAR)
+   FORCED LANDSCAPE ENGINE (Activates when viewport is in portrait)
    ========================================================================== */
-#floating-status-bar {
+body.forced-landscape-portrait #controller-app {
+  width: 100vh !important;
+  width: 100dvh !important;
+  height: 100vw !important;
+  height: 100dvw !important;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+@media (orientation: portrait) {
+  #controller-app {
+    width: 100vh !important;
+    width: 100dvh !important;
+    height: 100vw !important;
+    height: 100dvw !important;
+    transform-origin: top left;
+    transform: rotate(90deg) translateY(-100%);
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+  }
+}
+
+/* 907x400 Canvas Frame - Mathematical Uniform Gap Proportions */
+#gamepad-frame {
+  width: 100%;
+  height: 100%;
+  max-width: calc(100vh * (907 / 400));
+  aspect-ratio: 907 / 400;
+  position: relative;
+  background: var(--bg-black);
+  overflow: hidden;
+  margin: auto;
+}
+
+/* Preset Layer Visibility Management */
+.preset-layout-wrapper {
+  width: 100%;
+  height: 100%;
   position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  z-index: 50;
-  pointer-events: auto;
+  top: 0;
+  left: 0;
+  transition: opacity 0.1s ease;
 }
 
-.status-pill {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 9px;
-  color: #bbb;
-  cursor: pointer;
-}
+body.preset-1-active #preset-1-layer { display: block; opacity: 1; pointer-events: auto; }
+body.preset-1-active #preset-2-layer { display: none; opacity: 0; pointer-events: none; }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #444;
-}
+body.preset-2-active #preset-1-layer { display: none; opacity: 0; pointer-events: none; }
+body.preset-2-active #preset-2-layer { display: block; opacity: 1; pointer-events: auto; }
 
-.status-dot.online {
-  background: var(--accent-a);
-  box-shadow: 0 0 6px var(--accent-a);
-}
-
-.pill-divider {
-  color: #444;
-  margin: 0 2px;
-}
-
-.pill-toggle {
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  padding: 3px 9px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: bold;
-  color: #aaa;
-  cursor: pointer;
-  transition: all 0.08s ease;
-}
-
-.pill-toggle.active {
-  color: #fff;
-  border-color: var(--accent-cyan);
-  background: rgba(0, 255, 204, 0.15);
-  box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
-}
-
-.pill-btn {
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  padding: 3px 8px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: #999;
-  cursor: pointer;
-}
-
-.pill-btn:active {
-  background: #333;
-  color: #fff;
+/* Base module class for absolute placement */
+.gamepad-module {
+  position: absolute;
+  overflow: hidden;
+  touch-action: none;
 }
 
 /* ==========================================================================
-   2. DUAL GAMEPAD WINGS: LEFT (STICK + LT/LB) & RIGHT (ABXY + RT/RB)
+   UNIFORM 3PX BORDERS ACROSS EVERY COMPONENT
    ========================================================================== */
-#left-gamepad-zone, #right-gamepad-zone {
-  flex: 1;
+.bumper-btn {
+  width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  padding: 6px 12px;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Shoulder Cluster (Triggers & Bumpers) */
-.shoulder-cluster {
-  display: flex;
-  gap: 8px;
-  height: 52px;
-  min-height: 52px;
-  z-index: 20;
-}
-
-.shoulder-trigger {
-  flex: 2;
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  border: 1.5px solid var(--border-subtle);
-  border-radius: 10px;
-  position: relative;
-  overflow: hidden;
+  background: var(--panel-surface);
+  border: 3px solid var(--border-white);
+  border-radius: 4px;
+  color: var(--text-white);
+  font-family: var(--font-hud);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   cursor: pointer;
   touch-action: none;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
-  color: #fff;
-  transition: transform 0.04s, border-color 0.05s;
+  justify-content: center;
+  transition: all 0.06s ease;
 }
 
-.shoulder-trigger:active, .shoulder-trigger.active {
-  transform: scale(0.97);
+.bumper-btn:active, .bumper-btn.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.5);
 }
 
-#lt-trigger:active, #lt-trigger.active {
-  border-color: var(--accent-b);
+.wedge-btn {
+  width: 100%;
+  height: 100%;
+  background: var(--panel-surface);
+  border: 3px solid var(--border-white);
+  color: var(--text-white);
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.06s ease;
 }
 
-#rt-trigger:active, #rt-trigger.active {
-  border-color: var(--accent-a);
+.wedge-btn:active, .wedge-btn.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.5);
 }
 
-.trigger-fill {
+/* Triggers */
+.trigger-svg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.trigger-path {
+  fill: #08090d;
+  stroke: var(--border-white);
+  stroke-width: 3px;
+  vector-effect: non-scaling-stroke;
+  transition: fill 0.06s ease;
+}
+
+.trigger-inner {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.trigger-lbl {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--text-white);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.trigger-level-fill {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 0%;
+  background: rgba(255, 255, 255, 0.25);
   pointer-events: none;
-  transition: height 0.03s linear;
-}
-
-#lt-fill {
-  background: rgba(255, 51, 68, 0.4);
-  border-top: 2px solid var(--accent-b);
-}
-
-#rt-fill {
-  background: rgba(0, 255, 136, 0.4);
-  border-top: 2px solid var(--accent-a);
-}
-
-.trigger-label {
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
   z-index: 2;
+  transition: height 0.04s linear;
 }
 
-.trigger-sub {
-  font-size: 8px;
-  color: #888;
-  z-index: 2;
-  margin-top: 1px;
-}
-
-.shoulder-bumper {
-  flex: 1;
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  border: 1.5px solid var(--border-subtle);
-  border-radius: 10px;
-  color: #ccc;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 900;
+/* Thumbstick Anchors & Pucks */
+.stick-anchor {
+  position: absolute;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   touch-action: none;
-  transition: transform 0.04s, background 0.05s, border-color 0.05s;
+  z-index: 25;
 }
 
-.shoulder-bumper:active, .shoulder-bumper.active {
-  background: var(--bg-card-active);
-  border-color: #fff;
-  color: #fff;
-  transform: scale(0.96);
-}
-
-/* ==========================================================================
-   3. LEFT SIDE: DYNAMIC FLOATING JOYSTICK ARENA
-   ========================================================================== */
-#left-stick-arena {
-  flex: 1;
-  width: 100%;
-  position: relative;
-  touch-action: none;
+.stick-base-ring {
+  border-radius: 50%;
+  background: radial-gradient(circle, #101218 0%, #06070a 100%);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
-#stick-hint {
-  font-size: 9px;
-  color: rgba(255, 255, 255, 0.2);
-  letter-spacing: 0.1em;
-  pointer-events: none;
-  text-transform: uppercase;
+/* Monochromatic Metallic Puck */
+.stick-puck-puck, .red-puck {
+  border-radius: 50%;
+  background: radial-gradient(circle, #2d3342 0%, #151821 70%, #0b0c10 100%);
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.75);
+  cursor: grab;
+  touch-action: none;
+  transform: translate(0px, 0px);
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
 }
 
-/* Floating Joystick (Appears wherever thumb touches) */
-#floating-joystick {
-  position: fixed;
-  width: 130px;
-  height: 130px;
-  pointer-events: none;
-  z-index: 30;
-  transition: opacity 0.12s ease-out;
+.puck-center-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 6px #ffffff;
 }
 
-#stick-base {
+/* Screen Panels */
+.screen-panel {
+  background: #06080b;
+  border: 3px solid var(--border-white);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.screen-panel canvas {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(20,20,30,0.5) 70%);
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.05);
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
 }
 
-#stick-stick {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #3a3a48 0%, #1a1a24 70%, #0d0d12 100%);
-  border: 2px solid #666;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(255, 255, 255, 0.25);
+.screen-overlay {
   position: absolute;
-  top: calc(50% - 28px);
-  left: calc(50% - 28px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 6px;
+  right: 8px;
+  pointer-events: none;
 }
 
-#stick-stick::after {
-  content: "";
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-  box-shadow: 0 0 10px var(--accent-cyan);
-  opacity: 0.85;
+.micro-telemetry {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.08em;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 /* ==========================================================================
-   4. RIGHT SIDE: HUGE ERGONOMIC XYBA ACTION CLUSTER
+   BORDERLESS LOGO BUTTON (Clean logo.png, NO circular border)
    ========================================================================== */
-#action-cluster-arena {
-  flex: 1;
+.borderless-logo-btn, .nut-btn {
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  touch-action: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
 }
 
-#abxy-pad {
-  width: 210px;
-  height: 210px;
-  max-width: 100%;
-  max-height: 100%;
-  position: relative;
+.clean-settings-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+  transition: transform 0.1s ease, filter 0.1s ease;
 }
 
-/* HUGE Tactile Buttons with Realistic Bevel & Mechanical Keycap Feel */
-.huge-btn {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(45, 45, 55, 0.9) 0%, rgba(18, 18, 24, 0.95) 70%, rgba(10, 10, 14, 0.98) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 2px solid var(--border-subtle);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.7), inset 0 1.5px 2px rgba(255, 255, 255, 0.25), inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+.borderless-logo-btn:active .clean-settings-logo {
+  transform: scale(0.9);
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.9));
+}
+
+/* ==========================================================================
+   PRESET 1: SYMMETRICAL ESPORT (Exact Grid Alignment)
+   ========================================================================== */
+#preset-1-layer #mod-lt {
+  left: 0.99%;
+  top: 2.23%;
+  width: 24.69%;
+  height: 38.55%;
+  z-index: 20;
+}
+
+#preset-1-layer #mod-lb {
+  left: 26.67%;
+  top: 2.23%;
+  width: 19.01%;
+  height: 21.23%;
+  z-index: 15;
+}
+
+#preset-1-layer #mod-slot-ping {
+  left: 46.67%;
+  top: 2.23%;
+  width: 6.67%;
+  height: 21.23%;
+  background: var(--panel-surface);
+  border: 3px solid var(--border-white);
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  z-index: 15;
+  cursor: pointer;
+}
+
+#preset-1-layer #mod-rb {
+  left: 54.32%;
+  top: 2.23%;
+  width: 19.01%;
+  height: 21.23%;
+  z-index: 15;
+}
+
+#preset-1-layer #mod-rt {
+  left: 74.32%;
+  top: 2.23%;
+  width: 24.69%;
+  height: 38.55%;
+  z-index: 20;
+}
+
+#preset-1-layer #mod-back {
+  left: 18.15%;
+  top: 25.70%;
+  width: 16.17%;
+  height: 15.08%;
+  z-index: 18;
+}
+
+#preset-1-layer #mod-back .wedge-btn {
+  border-radius: 4px 4px 4px 28px;
+}
+
+#preset-1-layer #mod-start {
+  left: 65.68%;
+  top: 25.70%;
+  width: 16.17%;
+  height: 15.08%;
+  z-index: 18;
+}
+
+#preset-1-layer #mod-start .wedge-btn {
+  border-radius: 4px 4px 28px 4px;
+}
+
+#preset-1-layer #mod-gyro {
+  left: 35.31%;
+  top: 25.70%;
+  width: 29.38%;
+  height: 35.20%;
+  z-index: 15;
+}
+
+#preset-1-layer #mod-settings-nut {
+  left: 47.0%;
+  top: 56.5%;
+  width: 48px;
+  height: 48px;
+  z-index: 30;
+}
+
+#preset-1-layer #mod-visualizer {
+  left: 26.67%;
+  top: 63.13%;
+  width: 46.66%;
+  height: 34.64%;
+  z-index: 15;
+}
+
+#preset-1-layer .wing-arena {
+  top: 43.02%;
+  width: 24.69%;
+  height: 54.75%;
+  background: var(--panel-surface);
+  border: 3px solid var(--border-white);
+  border-radius: 4px;
+  z-index: 20;
+}
+
+#preset-1-layer #mod-left-wing {
+  left: 0.99%;
+}
+
+#preset-1-layer #mod-right-wing {
+  left: 74.32%;
+}
+
+.triangle-pad-cluster {
   position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.crosshair-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cross-line {
+  stroke: var(--border-white);
+  stroke-width: 3px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* D-Pad Triangles */
+.dpad-tri-btn {
+  position: absolute;
+  background: transparent;
+  border: none;
   cursor: pointer;
   touch-action: none;
-  transition: transform 0.04s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.05s ease, border-color 0.05s ease, background 0.05s ease;
+  z-index: 10;
+  transition: background 0.05s ease;
 }
 
-.huge-btn:active, .huge-btn.active {
-  transform: scale(0.92) translateY(2px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), inset 0 3px 6px rgba(0, 0, 0, 0.8);
+#dpad-up {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  clip-path: polygon(0 0, 100% 0, 50% 50%);
 }
 
-.btn-letter {
-  font-size: 26px;
-  font-weight: 900;
-  line-height: 1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+#dpad-down {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  clip-path: polygon(0 100%, 100% 100%, 50% 50%);
 }
 
-.btn-tag {
-  font-size: 8px;
-  font-weight: bold;
-  color: #888;
-  letter-spacing: 0.05em;
-  margin-top: 2px;
+#dpad-left {
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  clip-path: polygon(0 0, 50% 50%, 0 100%);
 }
 
-/* Diamond Button Coordinates */
-#btn-a {
-  bottom: 4px;
-  left: 70px;
-  border-color: rgba(0, 255, 136, 0.3);
-}
-#btn-a:active, #btn-a.active {
-  background: radial-gradient(circle at 35% 30%, rgba(0, 255, 136, 0.35) 0%, rgba(0, 60, 30, 0.9) 100%);
-  border-color: var(--accent-a);
-  box-shadow: 0 0 25px rgba(0, 255, 136, 0.6), inset 0 0 10px rgba(0, 255, 136, 0.3);
+#dpad-right {
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  clip-path: polygon(100% 0, 50% 50%, 100% 100%);
 }
 
-#btn-b {
-  right: 4px;
-  top: 70px;
-  border-color: rgba(255, 51, 68, 0.3);
-}
-#btn-b:active, #btn-b.active {
-  background: radial-gradient(circle at 35% 30%, rgba(255, 51, 68, 0.35) 0%, rgba(70, 10, 20, 0.9) 100%);
-  border-color: var(--accent-b);
-  box-shadow: 0 0 25px rgba(255, 51, 68, 0.6), inset 0 0 10px rgba(255, 51, 68, 0.3);
+.dpad-tri-btn:active, .dpad-tri-btn.active {
+  background: rgba(255, 255, 255, 0.3);
 }
 
-#btn-x {
-  left: 4px;
-  top: 70px;
-  border-color: rgba(47, 128, 237, 0.3);
-}
-#btn-x:active, #btn-x.active {
-  background: radial-gradient(circle at 35% 30%, rgba(47, 128, 237, 0.35) 0%, rgba(15, 35, 75, 0.9) 100%);
-  border-color: var(--accent-x);
-  box-shadow: 0 0 25px rgba(47, 128, 237, 0.6), inset 0 0 10px rgba(47, 128, 237, 0.3);
+/* YAXB Triangles */
+.yaxb-tri-btn {
+  position: absolute;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.05s ease;
 }
 
 #btn-y {
-  top: 4px;
-  left: 70px;
-  border-color: rgba(255, 187, 0, 0.3);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  clip-path: polygon(0 0, 100% 0, 50% 50%);
+  align-items: flex-start;
+  padding-top: 14px;
 }
-#btn-y:active, #btn-y.active {
-  background: radial-gradient(circle at 35% 30%, rgba(255, 187, 0, 0.35) 0%, rgba(70, 50, 0, 0.9) 100%);
-  border-color: var(--accent-y);
-  box-shadow: 0 0 25px rgba(255, 187, 0, 0.6), inset 0 0 10px rgba(255, 187, 0, 0.3);
+
+#btn-a {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  clip-path: polygon(0 100%, 100% 100%, 50% 50%);
+  align-items: flex-end;
+  padding-bottom: 14px;
+}
+
+#btn-x {
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  clip-path: polygon(0 0, 50% 50%, 0 100%);
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+
+#btn-b {
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  clip-path: polygon(100% 0, 50% 50%, 100% 100%);
+  justify-content: flex-end;
+  padding-right: 16px;
+}
+
+.yaxb-tri-btn:active, .yaxb-tri-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tri-letter {
+  font-family: var(--font-hud);
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+#preset-1-layer #left-stick-anchor,
+#preset-1-layer #right-stick-anchor {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70px;
+  height: 70px;
+}
+
+#preset-1-layer .stick-base-ring {
+  width: 60px;
+  height: 60px;
+}
+
+#preset-1-layer .stick-puck-puck {
+  width: 44px;
+  height: 44px;
+}
+
+.slot-badge-text {
+  font-family: var(--font-hud);
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.ping-badge-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 /* ==========================================================================
-   5. PORTRAIT & START MODALS
+   PRESET 2: ERGONOMIC TACTICAL (Mathematical Spacing, Zero Collisions)
    ========================================================================== */
-#orientation-warning {
-  display: none;
+#preset-2-layer #mod-lt-p2 {
+  left: 0.99%;
+  top: 2.23%;
+  width: 24.69%;
+  height: 38.55%;
+  z-index: 20;
+}
+
+#preset-2-layer #mod-lb-p2 {
+  left: 26.67%;
+  top: 2.23%;
+  width: 19.01%;
+  height: 21.23%;
+  z-index: 15;
+}
+
+.tactical-center-badge-stack {
+  left: 46.67%;
+  top: 2.23%;
+  width: 6.67%;
+  height: 21.23%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  z-index: 25;
+}
+
+.tactical-sub-badge {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
+}
+
+#preset-2-layer #mod-rb-p2 {
+  left: 54.32%;
+  top: 2.23%;
+  width: 19.01%;
+  height: 21.23%;
+  z-index: 15;
+}
+
+#preset-2-layer #mod-rt-p2 {
+  left: 74.32%;
+  top: 2.23%;
+  width: 24.69%;
+  height: 38.55%;
+  z-index: 20;
+}
+
+/* 45deg Angled Wedges */
+.tactical-back-module {
+  left: 18.15%;
+  top: 25.70%;
+  width: 16.17%;
+  height: 15.08%;
+  z-index: 18;
+}
+
+.angled-back-btn {
+  border-radius: 4px 4px 4px 20px;
+  clip-path: polygon(30% 0%, 100% 0%, 100% 100%, 0% 100%);
+}
+
+.tactical-start-module {
+  left: 65.68%;
+  top: 25.70%;
+  width: 16.17%;
+  height: 15.08%;
+  z-index: 18;
+}
+
+.angled-start-btn {
+  border-radius: 4px 4px 20px 4px;
+  clip-path: polygon(0% 0%, 70% 0%, 100% 100%, 0% 100%);
+}
+
+/* Panoramic Gyro HUD */
+.tactical-center-gyro {
+  left: 35.31%;
+  top: 25.70%;
+  width: 29.38%;
+  height: 36.31%;
+  z-index: 16;
+}
+
+/* Lower-Left Ergonomic Thumb Zone (Spacious, No Collisions) */
+.tactical-left-thumb-zone {
+  left: 0.99%;
+  top: 43.02%;
+  width: 24.69%;
+  height: 54.75%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ergonomic-stick-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 76px;
+  height: 76px;
+}
+
+.tactical-base-ring {
+  width: 64px;
+  height: 64px;
+}
+
+/* Mid-Right Thumbstick (Adjacent to Gyro Screen, Safe Margin from Cluster) */
+.mid-right-stick-module {
+  left: 66.0%;
+  top: 47.0%;
+  width: 64px;
+  height: 64px;
+  z-index: 22;
+}
+
+.ergonomic-right-stick-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+}
+
+/* Ergonomic Polygon Action Cluster */
+.tactical-right-cluster {
+  left: 75.5%;
+  top: 43.02%;
+  width: 23.5%;
+  height: 54.75%;
+  z-index: 20;
+  position: absolute;
+}
+
+.poly-btn-wrap {
+  position: absolute;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.poly-wrap-y {
+  top: 0;
+  left: 0;
+  width: 68%;
+  height: 46%;
+}
+
+.poly-wrap-x {
+  bottom: 0;
+  left: 0;
+  width: 32%;
+  height: 50%;
+}
+
+.poly-wrap-a {
+  bottom: 0;
+  left: 36%;
+  width: 32%;
+  height: 50%;
+}
+
+.poly-wrap-b {
+  top: 0;
+  right: 0;
+  width: 28%;
+  height: 100%;
+}
+
+.poly-btn {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.poly-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.poly-shape {
+  fill: #0d0f14;
+  stroke: var(--border-white);
+  stroke-width: 3px;
+  vector-effect: non-scaling-stroke;
+  transition: all 0.08s ease;
+}
+
+.poly-btn:active .poly-shape, .poly-btn.active .poly-shape {
+  fill: #ffffff;
+  stroke: #ffffff;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+}
+
+.poly-label {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-hud);
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffffff;
+  pointer-events: none;
+  transition: color 0.08s ease;
+}
+
+.poly-btn:active .poly-label, .poly-btn.active .poly-label {
+  color: #000000;
+}
+
+/* ==========================================================================
+   SUPER MINIMALIST SETTINGS POPUP: JUST BUTTONS [ 1 ] AND [ 2 ]
+   ========================================================================== */
+.settings-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  background: var(--bg-dark);
-  z-index: 1000;
-  flex-direction: column;
-  justify-content: center;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 100;
+  display: flex;
   align-items: center;
-  padding: 24px;
-  text-align: center;
-  gap: 8px;
+  justify-content: center;
 }
 
-@media (orientation: portrait) {
-  #orientation-warning {
-    display: flex;
-  }
+.settings-minimal-card {
+  display: flex;
+  gap: 24px;
+  padding: 24px 28px;
+  background: #08090b;
+  border: 3px solid #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.9);
 }
 
+.preset-choice-btn {
+  width: 80px;
+  height: 80px;
+  background: #08090d;
+  border: 3px solid #ffffff;
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: var(--font-hud);
+  font-size: 34px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.preset-choice-btn:hover {
+  background: #181c26;
+}
+
+.preset-choice-btn.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.7);
+}
+
+/* ==========================================================================
+   INITIAL ENGAGE MODAL
+   ========================================================================== */
 .modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  background: rgba(0, 0, 0, 0.95);
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 150;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 999;
+  justify-content: center;
 }
 
 .modal-card {
-  width: 90%;
-  max-width: 400px;
-  background: #111116;
-  border: 1px solid #333;
-  padding: 24px;
+  width: 85%;
+  max-width: 440px;
+  background: linear-gradient(180deg, #101319 0%, #06070a 100%);
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 32px 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  border-radius: 12px;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
+}
+
+.modal-logo-wrap {
+  margin-bottom: 16px;
+}
+
+.modal-logo {
+  width: 56px;
+  height: 56px;
+}
+
+.modal-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.modal-subtitle {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 24px;
 }
 
 .primary-btn {
-  background: #ffffff;
-  color: #000000;
-  border: none;
+  width: 100%;
   padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  text-align: center;
+  background: #ffffff;
+  border: none;
   border-radius: 6px;
+  color: #000000;
+  font-family: var(--font-hud);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+  transition: all 0.1s ease;
+}
+
+.primary-btn:active {
+  transform: scale(0.97);
 }

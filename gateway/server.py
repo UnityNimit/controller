@@ -134,11 +134,13 @@ class ControllerGatewayServer:
         use_ssl: bool = True,
         port: Optional[int] = None,
         enable_simulator: bool = False,
-        force_mock_input: bool = False
+        force_mock_input: bool = False,
+        bridge: Optional[Any] = None
     ):
         self.use_ssl = use_ssl
         self.port = port or (settings.network.HTTPS_PORT if use_ssl else settings.network.HTTP_PORT)
         self.enable_simulator = enable_simulator
+        self.bridge = bridge
         
         # Subsystems
         self.authenticator = ChallengeResponseAuthenticator(
@@ -156,6 +158,13 @@ class ControllerGatewayServer:
         self.pipelines: Dict[str, SensorFusionPipeline] = {}
         # Connected authenticated websockets {websocket: client_id}
         self.active_clients: Dict[WebSocketServerProtocol, str] = {}
+        # Active client sockets mapped by client_id {client_id: websocket}
+        self.client_sockets: Dict[str, WebSocketServerProtocol] = {}
+
+        # Set up bi-directional rumble callback from OS virtual gamepads
+        self.input_manager.set_rumble_callback(self._on_rumble_event)
+        if self.bridge is not None:
+            self.bridge.swap_slots_callback = self.swap_player_slots
 
         # Telemetry State
         self.latest_telemetry: Dict[str, Any] = {
@@ -198,10 +207,14 @@ class ControllerGatewayServer:
 
         from websockets.datastructures import Headers
         from websockets.http11 import Response
-
         path = request.path
-        client_dir = settings.BASE_DIR / "client"
         clean_path = path.split("?")[0].lstrip("/")
+
+        client_dir = getattr(settings, "BUNDLE_DIR", settings.BASE_DIR) / "client"
+        if not client_dir.exists():
+            client_dir = settings.BASE_DIR / "client"
+        if not client_dir.exists():
+            client_dir = Path.cwd() / "client"
         if not clean_path or clean_path == "":
             file_path = client_dir / "index.html"
         else:
@@ -267,8 +280,11 @@ class ControllerGatewayServer:
                 await websocket.close(1008, reason)
                 return
 
-            # Phase 2: Slot Allocation
-            player_slot = self.input_manager.allocate_slot(client_id)
+            pref = msg.get("preferred_slot")
+            preferred_idx = (int(pref) - 1) if pref is not None and str(pref).isdigit() else None
+
+            # Phase 2: Slot Allocation (with persistent leasing and player preference)
+            player_slot = self.input_manager.allocate_slot(client_id, preferred_slot=preferred_idx)
             if player_slot is None:
                 await websocket.send(json.dumps({"type": "AUTH_ERROR", "reason": "SERVER_FULL"}))
                 await websocket.close(1013, "Maximum players reached")
@@ -283,6 +299,7 @@ class ControllerGatewayServer:
                 jerk_threshold=settings.filters.JERK_HANDBRAKE_THRESHOLD
             )
             self.active_clients[websocket] = client_id
+            self.client_sockets[client_id] = websocket
 
             # Send Auth Success with Player Slot & Theme Color
             player_color = settings.clients.PLAYER_COLORS[player_slot % len(settings.clients.PLAYER_COLORS)]
@@ -297,6 +314,8 @@ class ControllerGatewayServer:
                 }
             }))
             logger.info(f"Client [{client_id[:8]}] authenticated successfully -> Player {player_slot + 1}")
+            if self.bridge is not None:
+                self.bridge.register_client(player_slot, client_id, client_ip)
 
             # Phase 3: Telemetry Uplink Processing Loop
             async for message in websocket:
@@ -307,8 +326,24 @@ class ControllerGatewayServer:
                     seq = int(data.get("seq", 0))
                     client_ts = float(data.get("ts", time.time()))
 
+                    buttons = data.get("buttons", {})
+                    raw_stick_x = int(data.get("stick_x", 0))
+                    raw_stick_y = int(data.get("stick_y", 0))
+                    raw_right_x = int(data.get("right_stick_x", 0))
+                    raw_right_y = int(data.get("right_stick_y", 0))
+                    raw_th = float(data.get("throttle", 0.0))
+                    raw_br = float(data.get("brake", 0.0))
+
+                    # Safety check: neutral and zero-reset transitions bypass rate-limit drops
+                    is_neutral = (
+                        (raw_stick_x == 0 and raw_stick_y == 0)
+                        or (raw_th <= 0.001 and raw_br <= 0.001)
+                        or (raw_right_x == 0 and raw_right_y == 0)
+                        or not any(buttons.values())
+                    )
+
                     # Pass through Network Anomaly Firewall
-                    accepted, drop_reason = self.firewall.inspect_packet(client_id, seq, client_ts)
+                    accepted, drop_reason = self.firewall.inspect_packet(client_id, seq, client_ts, is_neutral=is_neutral)
                     if not accepted:
                         logger.debug(f"Packet from [{client_id[:8]}] dropped by firewall: {drop_reason}")
                         continue
@@ -325,6 +360,8 @@ class ControllerGatewayServer:
                         stick_x = int(data.get("stick_x", 0))
 
                     stick_y = int(data.get("stick_y", 0))
+                    right_stick_x = int(data.get("right_stick_x", 0))
+                    right_stick_y = int(data.get("right_stick_y", 0))
 
                     # Process Triggers (Gas & Brake)
                     raw_th = float(data.get("throttle", 0.0))
@@ -338,6 +375,8 @@ class ControllerGatewayServer:
                     control_state = {
                         "stick_x": stick_x,
                         "stick_y": stick_y,
+                        "right_stick_x": right_stick_x,
+                        "right_stick_y": right_stick_y,
                         "throttle": th_byte,
                         "brake": br_byte,
                         "buttons": buttons
@@ -345,7 +384,7 @@ class ControllerGatewayServer:
                     self.input_manager.dispatch(client_id, control_state)
 
                     # Record to QoS Flight Data Buffer
-                    self.qos_recorder.record_uplink(
+                    qos_rec = self.qos_recorder.record_uplink(
                         client_id=client_id,
                         seq=seq,
                         client_timestamp=client_ts,
@@ -355,6 +394,17 @@ class ControllerGatewayServer:
                         brake=br_byte,
                         handbrake=buttons.get("HANDBRAKE", False)
                     )
+
+                    if self.bridge is not None and player_slot is not None:
+                        client_rtt = float(data.get("rtt", 0.0))
+                        dt_ms = qos_rec.get("inter_arrival_ms", 16.6)
+                        self.bridge.record_input(
+                            slot_index=player_slot,
+                            client_id=client_id,
+                            control_state=control_state,
+                            client_rtt=client_rtt,
+                            inter_arrival_ms=dt_ms
+                        )
 
                 elif msg_type == "CALIBRATE":
                     angle = float(data.get("angle", 0.0))
@@ -373,16 +423,77 @@ class ControllerGatewayServer:
             if websocket in self.active_clients:
                 del self.active_clients[websocket]
             if client_id:
-                self.input_manager.release_slot(client_id)
+                if self.client_sockets.get(client_id) == websocket:
+                    self.client_sockets.pop(client_id, None)
+                slot = self.input_manager.release_slot(client_id)
+                if self.bridge is not None and slot is not None:
+                    self.bridge.unregister_client(slot, client_id)
                 self.pipelines.pop(client_id, None)
                 self.firewall.reset_client(client_id)
                 logger.info(f"Cleaned up session for client [{client_id[:8]}]")
+
+    async def _send_safe(self, ws, msg: str) -> None:
+        """Helper to send a message over a websocket ignoring closed socket errors."""
+        try:
+            if ws and not ws.closed:
+                await ws.send(msg)
+        except Exception:
+            pass
+
+    def _on_rumble_event(self, slot_idx: int, large_motor: int, small_motor: int) -> None:
+        """Invoked by OS virtual gamepad when game engine sends XInput force-feedback."""
+        if not self._running or getattr(self, "loop", None) is None:
+            return
+        if 0 <= slot_idx < len(self.input_manager.slots):
+            cid = self.input_manager.slots[slot_idx]
+            if cid and cid in self.client_sockets:
+                ws = self.client_sockets[cid]
+                msg = json.dumps({
+                    "type": "RUMBLE",
+                    "large": large_motor,
+                    "small": small_motor
+                })
+                try:
+                    asyncio.run_coroutine_threadsafe(self._send_safe(ws, msg), self.loop)
+                except Exception:
+                    pass
+
+    def swap_player_slots(self, slot_a: int, slot_b: int) -> bool:
+        """Swaps controller assignments between slot_a and slot_b and notifies clients."""
+        client_a, client_b = self.input_manager.swap_slots(slot_a, slot_b)
+        if getattr(self, "loop", None) is not None:
+            if client_a and client_a in self.client_sockets:
+                ws = self.client_sockets[client_a]
+                color_b = settings.clients.PLAYER_COLORS[slot_b % len(settings.clients.PLAYER_COLORS)]
+                asyncio.run_coroutine_threadsafe(
+                    self._send_safe(ws, json.dumps({
+                        "type": "SLOT_REASSIGNED",
+                        "player_slot": slot_b + 1,
+                        "player_color": color_b
+                    })),
+                    self.loop
+                )
+            if client_b and client_b in self.client_sockets:
+                ws = self.client_sockets[client_b]
+                color_a = settings.clients.PLAYER_COLORS[slot_a % len(settings.clients.PLAYER_COLORS)]
+                asyncio.run_coroutine_threadsafe(
+                    self._send_safe(ws, json.dumps({
+                        "type": "SLOT_REASSIGNED",
+                        "player_slot": slot_a + 1,
+                        "player_color": color_a
+                    })),
+                    self.loop
+                )
+        return True
 
     async def _downlink_telemetry_loop(self) -> None:
         """Broadcasts live game telemetry and dynamic haptic triggers to connected phones at 60 Hz."""
         interval = 1.0 / settings.network.TELEMETRY_BROADCAST_RATE_HZ
         while self._running:
             start_t = time.perf_counter()
+            # Tick deadman's switch watchdog to neutral-reset silent controllers
+            self.input_manager.tick_watchdog(0.120)
+
             if self.active_clients:
                 telem = self.latest_telemetry
                 rpm = telem.get("rpm", 0.0)
@@ -451,6 +562,7 @@ class ControllerGatewayServer:
     async def start(self) -> None:
         """Starts HTTP/WebSocket server and telemetry services."""
         self._running = True
+        self.loop = asyncio.get_running_loop()
         host_ips = get_local_ip_addresses()
 
         # SSL Configuration
@@ -489,9 +601,28 @@ class ControllerGatewayServer:
 
         self._render_ascii_banner(host_ips)
 
+        if self.bridge is not None:
+            proto = "https" if self.use_ssl else "http"
+            primary_ip = host_ips[0]
+            url = f"{proto}://{primary_ip}:{self.port}"
+            self.bridge.server_online = True
+            self.bridge.server_url = url
+            self.bridge.primary_ip = primary_ip
+            self.bridge.port = self.port
+            self.bridge.ssl_enabled = self.use_ssl
+            driver_desc = "ViGEm Native X360" if (
+                self.input_manager.controllers and
+                hasattr(self.input_manager.controllers[0], "gamepad")
+            ) else "Keyboard Fallback"
+            self.bridge.driver_status = driver_desc
+            self.bridge.pulse_test_callback = self.input_manager.pulse_test_button
+            self.bridge.reinit_driver_callback = self.input_manager.reinit_controllers
+
     async def stop(self) -> None:
         """Gracefully shuts down all subsystems and hardware emulations."""
         self._running = False
+        if self.bridge is not None:
+            self.bridge.server_online = False
         if self._downlink_task:
             self._downlink_task.cancel()
         if self.telemetry_simulator:

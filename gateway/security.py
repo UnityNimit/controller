@@ -96,9 +96,9 @@ class AnomalyFirewall:
     """
     def __init__(
         self,
-        max_rate_hz: float = 120.0,
-        min_inter_arrival_sec: float = 0.003,
-        max_consecutive_anomalies: int = 15
+        max_rate_hz: float = 1000.0,
+        min_inter_arrival_sec: float = 0.0001,
+        max_consecutive_anomalies: int = 50
     ):
         self.max_rate_hz = float(max_rate_hz)
         self.min_inter_arrival = float(min_inter_arrival_sec)
@@ -110,9 +110,11 @@ class AnomalyFirewall:
         self.anomaly_count: Dict[str, int] = {}
         self.packet_count_window: Dict[str, list] = {}
 
-    def inspect_packet(self, client_id: str, seq: int, client_time: float) -> Tuple[bool, Optional[str]]:
+    def inspect_packet(self, client_id: str, seq: int, client_time: float, is_neutral: bool = False) -> Tuple[bool, Optional[str]]:
         """
         Inspects an incoming uplink packet.
+        Safety critical neutral/zero-reset packets bypass inter-arrival and rate caps
+        to guarantee controller inputs never stick or scroll infinitely.
         Returns:
             (is_accepted: bool, drop_reason: Optional[str])
         """
@@ -125,24 +127,26 @@ class AnomalyFirewall:
                 self._record_anomaly(client_id)
                 return False, f"SEQUENCE_REGRESSION: Received seq {seq}, expected > {self.last_seq_num[client_id]}"
 
-        # 2. Inter-Arrival Time Guard (detects packet-stuffing / micro-burst flooding)
-        if client_id in self.last_packet_time:
-            dt = now - self.last_packet_time[client_id]
-            if dt < self.min_inter_arrival:
+        # Neutral / zero-reset packets always bypass timing guards for player safety
+        if not is_neutral:
+            # 2. Inter-Arrival Time Guard (detects packet-stuffing / micro-burst flooding)
+            if client_id in self.last_packet_time:
+                dt = now - self.last_packet_time[client_id]
+                if dt < self.min_inter_arrival:
+                    self._record_anomaly(client_id)
+                    return False, f"INTER_ARRIVAL_VIOLATION: dt {dt*1000:.2f}ms < {self.min_inter_arrival*1000:.1f}ms limit"
+
+            # 3. Frequency Rate Limiting Window (1.0 second sliding window)
+            timestamps = self.packet_count_window.setdefault(client_id, [])
+            timestamps.append(now)
+            # Purge timestamps older than 1.0s
+            cutoff = now - 1.0
+            while timestamps and timestamps[0] < cutoff:
+                timestamps.pop(0)
+
+            if len(timestamps) > self.max_rate_hz:
                 self._record_anomaly(client_id)
-                return False, f"INTER_ARRIVAL_VIOLATION: dt {dt*1000:.2f}ms < {self.min_inter_arrival*1000:.1f}ms limit"
-
-        # 3. Frequency Rate Limiting Window (1.0 second sliding window)
-        timestamps = self.packet_count_window.setdefault(client_id, [])
-        timestamps.append(now)
-        # Purge timestamps older than 1.0s
-        cutoff = now - 1.0
-        while timestamps and timestamps[0] < cutoff:
-            timestamps.pop(0)
-
-        if len(timestamps) > self.max_rate_hz:
-            self._record_anomaly(client_id)
-            return False, f"RATE_LIMIT_EXCEEDED: {len(timestamps)} pkts/sec exceeds {self.max_rate_hz} Hz cap"
+                return False, f"RATE_LIMIT_EXCEEDED: {len(timestamps)} pkts/sec exceeds {self.max_rate_hz} Hz cap"
 
         # Packet accepted: Update state
         self.last_packet_time[client_id] = now

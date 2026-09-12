@@ -6,114 +6,291 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>PROJECT CONTROLLER</title>
+  <meta name="theme-color" content="#000000">
+  <title>Controller</title>
+  <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="css/cockpit.css">
 </head>
-<body>
+<body class="preset-1-active">
 
   <div id="controller-app">
-    <!-- Floating Minimalist Status & Controls Bar (No screen-hogging top bar) -->
-    <div id="floating-status-bar">
-      <div class="status-pill" id="pill-fullscreen">
-        <span class="status-dot" id="status-dot"></span>
-        <span id="rtt-val">-- ms</span>
-        <span class="pill-divider">|</span>
-        <span>⛶ FULL</span>
-      </div>
+    <div id="gamepad-frame">
 
-      <button class="pill-toggle active" id="btn-toggle-gyro">GYRO: ON</button>
-      <button class="pill-toggle" id="btn-toggle-trig">TRIG: TAP</button>
-      <button class="pill-btn" id="btn-calibrate">ZERO</button>
-      <button class="pill-btn" id="btn-back">BACK</button>
-      <button class="pill-btn" id="btn-start">START</button>
-    </div>
+      <!-- ===================================================================
+           PRESET 1: SYMMETRICAL ESPORT (Image 1 Reference)
+           =================================================================== -->
+      <div class="preset-layout-wrapper" id="preset-1-layer">
 
-    <!-- Left Wing: LT Trigger, LB Bumper, and Dynamic Floating Joystick Arena -->
-    <div id="left-gamepad-zone">
-      <div class="shoulder-cluster">
-        <button class="shoulder-trigger" id="lt-trigger">
-          <div class="trigger-fill" id="lt-fill"></div>
-          <span class="trigger-label">LT</span>
-          <span class="trigger-sub">BRAKE / REV</span>
-        </button>
-        <button class="shoulder-bumper" id="btn-lb">
-          LB
-        </button>
-      </div>
-
-      <!-- Entire Left Area is a Dynamic Floating Joystick Arena -->
-      <div id="left-stick-arena">
-        <div id="floating-joystick" style="opacity: 0;">
-          <div id="stick-base">
-            <div id="stick-stick"></div>
+        <!-- 1. TOP ROW: LT, LB, P1/PING, RB, RT -->
+        <div class="gamepad-module" id="mod-lt">
+          <svg class="trigger-svg" viewBox="0 0 200 138" preserveAspectRatio="none">
+            <path class="trigger-path" id="lt-path" d="M 3,3 L 197,3 L 197,80 A 58,58 0 0,0 139,135 L 3,135 Z" />
+          </svg>
+          <div class="trigger-inner" id="lt-trigger">
+            <div class="trigger-level-fill" id="lt-fill"></div>
+            <span class="mod-label trigger-lbl">LT</span>
           </div>
         </div>
-        <div id="stick-hint">TOUCH TO STEER</div>
-      </div>
-    </div>
 
-    <!-- Right Wing: RB Bumper, RT Trigger, and Huge XYBA Diamond -->
-    <div id="right-gamepad-zone">
-      <div class="shoulder-cluster">
-        <button class="shoulder-bumper" id="btn-rb">
-          RB
-        </button>
-        <button class="shoulder-trigger" id="rt-trigger">
-          <div class="trigger-fill" id="rt-fill"></div>
-          <span class="trigger-label">RT</span>
-          <span class="trigger-sub">DRIVE / GAS</span>
-        </button>
-      </div>
+        <div class="gamepad-module" id="mod-lb">
+          <button class="bumper-btn" id="btn-lb">LB</button>
+        </div>
 
-      <!-- Huge Ergonomic Diamond Action Cluster -->
-      <div id="action-cluster-arena">
-        <div id="abxy-pad">
-          <!-- Y: Ball Cam (Top) -->
-          <button class="huge-btn" id="btn-y">
-            <span class="btn-letter" style="color: var(--accent-y);">Y</span>
-            <span class="btn-tag">CAM</span>
-          </button>
-          <!-- X: Powerslide / Air Roll (Left) -->
-          <button class="huge-btn" id="btn-x">
-            <span class="btn-letter" style="color: var(--accent-x);">X</span>
-            <span class="btn-tag">SLIDE</span>
-          </button>
-          <!-- B: Boost (Right) -->
-          <button class="huge-btn" id="btn-b">
-            <span class="btn-letter" style="color: var(--accent-b);">B</span>
-            <span class="btn-tag">BOOST</span>
-          </button>
-          <!-- A: Jump (Bottom - Primary) -->
-          <button class="huge-btn" id="btn-a">
-            <span class="btn-letter" style="color: var(--accent-a);">A</span>
-            <span class="btn-tag">JUMP</span>
+        <div class="gamepad-module" id="mod-slot-ping" title="Tap to switch player slot">
+          <div class="slot-badge-text" id="slot-text">P1</div>
+          <div class="ping-badge-text" id="ping-text">ping</div>
+        </div>
+
+        <div class="gamepad-module" id="mod-rb">
+          <button class="bumper-btn" id="btn-rb">RB</button>
+        </div>
+
+        <div class="gamepad-module" id="mod-rt">
+          <svg class="trigger-svg" viewBox="0 0 200 138" preserveAspectRatio="none">
+            <path class="trigger-path" id="rt-path" d="M 3,3 L 197,3 L 197,135 L 61,135 A 58,58 0 0,0 3,80 Z" />
+          </svg>
+          <div class="trigger-inner" id="rt-trigger">
+            <div class="trigger-level-fill" id="rt-fill"></div>
+            <span class="mod-label trigger-lbl">RT</span>
+          </div>
+        </div>
+
+        <!-- 2. SUB-ROW: BACK, GYRO SCREEN, START -->
+        <div class="gamepad-module" id="mod-back">
+          <button class="wedge-btn" id="btn-back">BACK</button>
+        </div>
+
+        <div class="gamepad-module screen-panel" id="mod-gyro" title="Tap to toggle Gyro steering">
+          <canvas id="gyro-canvas"></canvas>
+          <div class="screen-overlay" id="gyro-overlay">
+            <span class="micro-telemetry" id="gyro-telemetry">0.0°</span>
+          </div>
+        </div>
+
+        <div class="gamepad-module" id="mod-start">
+          <button class="wedge-btn" id="btn-start">START</button>
+        </div>
+
+        <!-- 3. SETTINGS LOGO BUTTON (Clean logo.png, NO circular border) -->
+        <div class="gamepad-module" id="mod-settings-nut" title="Switch Preset">
+          <button class="nut-btn borderless-logo-btn" id="btn-settings-logo">
+            <img src="logo.png" alt="Controller" class="clean-settings-logo">
           </button>
         </div>
+
+        <!-- 4. VISUALIZER SCREEN -->
+        <div class="gamepad-module screen-panel" id="mod-visualizer">
+          <canvas id="visualizer-canvas"></canvas>
+        </div>
+
+        <!-- 5. LEFT WING: TACTICAL D-PAD + FIXED LEFT STICK -->
+        <div class="gamepad-module wing-arena" id="mod-left-wing">
+          <div class="triangle-pad-cluster" id="left-dpad-cluster">
+            <button class="dpad-tri-btn" id="dpad-up" data-dir="DPAD_UP" title="Up"></button>
+            <button class="dpad-tri-btn" id="dpad-left" data-dir="DPAD_LEFT" title="Left"></button>
+            <button class="dpad-tri-btn" id="dpad-right" data-dir="DPAD_RIGHT" title="Right"></button>
+            <button class="dpad-tri-btn" id="dpad-down" data-dir="DPAD_DOWN" title="Down"></button>
+
+            <svg class="crosshair-svg" viewBox="0 0 200 196" preserveAspectRatio="none">
+              <line x1="0" y1="0" x2="200" y2="196" class="cross-line" />
+              <line x1="200" y1="0" x2="0" y2="196" class="cross-line" />
+            </svg>
+          </div>
+
+          <div class="stick-anchor" id="left-stick-anchor">
+            <div class="stick-base-ring" id="left-stick-base">
+              <div class="stick-puck-puck red-puck" id="left-stick-puck">
+                <div class="puck-center-pip"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. RIGHT WING: YAXB CLUSTER + FIXED RIGHT STICK -->
+        <div class="gamepad-module wing-arena" id="mod-right-wing">
+          <div class="triangle-pad-cluster" id="right-abxy-cluster">
+            <button class="yaxb-tri-btn" id="btn-y" data-btn="Y">
+              <span class="tri-letter letter-y">Y</span>
+            </button>
+            <button class="yaxb-tri-btn" id="btn-x" data-btn="X">
+              <span class="tri-letter letter-x">X</span>
+            </button>
+            <button class="yaxb-tri-btn" id="btn-b" data-btn="B">
+              <span class="tri-letter letter-b">B</span>
+            </button>
+            <button class="yaxb-tri-btn" id="btn-a" data-btn="A">
+              <span class="tri-letter letter-a">A</span>
+            </button>
+
+            <svg class="crosshair-svg" viewBox="0 0 200 196" preserveAspectRatio="none">
+              <line x1="0" y1="0" x2="200" y2="196" class="cross-line" />
+              <line x1="200" y1="0" x2="0" y2="196" class="cross-line" />
+            </svg>
+          </div>
+
+          <div class="stick-anchor" id="right-stick-anchor">
+            <div class="stick-base-ring" id="right-stick-base">
+              <div class="stick-puck-puck red-puck" id="right-stick-puck">
+                <div class="puck-center-pip"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
+
+
+      <!-- ===================================================================
+           PRESET 2: ERGONOMIC TACTICAL (Image 2 Reference)
+           =================================================================== -->
+      <div class="preset-layout-wrapper" id="preset-2-layer">
+
+        <!-- 1. TOP ROW: 45deg Chamfered LT, LB, LOGO+P1/PING, RB, Chamfered RT -->
+        <div class="gamepad-module" id="mod-lt-p2">
+          <svg class="trigger-svg" viewBox="0 0 200 138" preserveAspectRatio="none">
+            <path class="trigger-path" d="M 3,3 L 197,3 L 197,80 L 142,135 L 3,135 Z" />
+          </svg>
+          <div class="trigger-inner" id="lt-trigger-p2">
+            <div class="trigger-level-fill" id="lt-fill-p2"></div>
+            <span class="mod-label trigger-lbl">LT</span>
+          </div>
+        </div>
+
+        <div class="gamepad-module" id="mod-lb-p2">
+          <button class="bumper-btn" id="btn-lb-p2">LB</button>
+        </div>
+
+        <!-- Top Center: Clean Logo.png (NO border) + P1/Ping -->
+        <div class="gamepad-module tactical-center-badge-stack" id="mod-slot-ping-p2">
+          <button class="nut-btn borderless-logo-btn" id="btn-settings-logo-p2" title="Switch Preset">
+            <img src="logo.png" alt="Controller" class="clean-settings-logo">
+          </button>
+          <div class="tactical-sub-badge" id="tactical-sub-badge-p2" title="Tap to switch slot">
+            <span class="slot-badge-text" id="slot-text-p2">P1</span>
+            <span class="ping-badge-text" id="ping-text-p2">ping</span>
+          </div>
+        </div>
+
+        <div class="gamepad-module" id="mod-rb-p2">
+          <button class="bumper-btn" id="btn-rb-p2">RB</button>
+        </div>
+
+        <div class="gamepad-module" id="mod-rt-p2">
+          <svg class="trigger-svg" viewBox="0 0 200 138" preserveAspectRatio="none">
+            <path class="trigger-path" d="M 3,3 L 197,3 L 197,135 L 58,135 L 3,80 Z" />
+          </svg>
+          <div class="trigger-inner" id="rt-trigger-p2">
+            <div class="trigger-level-fill" id="rt-fill-p2"></div>
+            <span class="mod-label trigger-lbl">RT</span>
+          </div>
+        </div>
+
+        <!-- 2. SUB-ROW: Angled BACK & START Wedges -->
+        <div class="gamepad-module tactical-back-module" id="mod-back-p2">
+          <button class="wedge-btn angled-back-btn" id="btn-back-p2">Back</button>
+        </div>
+
+        <div class="gamepad-module tactical-start-module" id="mod-start-p2">
+          <button class="wedge-btn angled-start-btn" id="btn-start-p2">Start</button>
+        </div>
+
+        <!-- 3. CENTER: Panoramic Gyro HUD -->
+        <div class="gamepad-module screen-panel tactical-center-gyro" id="mod-gyro-p2" title="Tap to toggle Gyro steering">
+          <canvas id="gyro-canvas-p2"></canvas>
+          <div class="screen-overlay">
+            <span class="micro-telemetry" id="gyro-telemetry-p2">0.0°</span>
+          </div>
+        </div>
+
+        <!-- 4. LOWER-LEFT: Ergonomic Open Thumbstick Sweep -->
+        <div class="gamepad-module tactical-left-thumb-zone" id="mod-left-wing-p2">
+          <div class="stick-anchor ergonomic-stick-anchor" id="left-stick-anchor-p2">
+            <div class="stick-base-ring tactical-base-ring" id="left-stick-base-p2">
+              <div class="stick-puck-puck red-puck" id="left-stick-puck-p2">
+                <div class="puck-center-pip"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. MID-RIGHT THUMBSTICK (Clear channel, zero collisions) -->
+        <div class="gamepad-module mid-right-stick-module" id="mod-right-stick-p2">
+          <div class="stick-anchor ergonomic-right-stick-anchor" id="right-stick-anchor-p2">
+            <div class="stick-base-ring tactical-base-ring" id="right-stick-base-p2">
+              <div class="stick-puck-puck red-puck" id="right-stick-puck-p2">
+                <div class="puck-center-pip"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. ERGONOMIC POLYGON ACTION CLUSTER -->
+        <div class="gamepad-module tactical-right-cluster" id="mod-right-wing-p2">
+          <!-- Y Top Trapezoid -->
+          <div class="poly-btn-wrap poly-wrap-y">
+            <button class="poly-btn" id="btn-y-p2" data-btn="Y">
+              <svg class="poly-svg" viewBox="0 0 110 80" preserveAspectRatio="none">
+                <polygon points="35,3 107,3 107,77 3,77" class="poly-shape" />
+              </svg>
+              <span class="poly-label letter-y">Y</span>
+            </button>
+          </div>
+
+          <!-- X Lower-Left Trapezoid -->
+          <div class="poly-btn-wrap poly-wrap-x">
+            <button class="poly-btn" id="btn-x-p2" data-btn="X">
+              <svg class="poly-svg" viewBox="0 0 90 90" preserveAspectRatio="none">
+                <polygon points="45,3 87,3 87,87 3,87" class="poly-shape" />
+              </svg>
+              <span class="poly-label letter-x">X</span>
+            </button>
+          </div>
+
+          <!-- A Lower-Right Trapezoid -->
+          <div class="poly-btn-wrap poly-wrap-a">
+            <button class="poly-btn" id="btn-a-p2" data-btn="A">
+              <svg class="poly-svg" viewBox="0 0 90 90" preserveAspectRatio="none">
+                <polygon points="3,3 70,3 87,87 3,87" class="poly-shape" />
+              </svg>
+              <span class="poly-label letter-a">A</span>
+            </button>
+          </div>
+
+          <!-- B Elongated Right Wing Polygon -->
+          <div class="poly-btn-wrap poly-wrap-b">
+            <button class="poly-btn" id="btn-b-p2" data-btn="B">
+              <svg class="poly-svg" viewBox="0 0 66 186" preserveAspectRatio="none">
+                <polygon points="3,3 63,3 63,183 45,183 3,78" class="poly-shape" />
+              </svg>
+              <span class="poly-label letter-b">B</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </div>
 
-  <!-- Portrait Orientation Warning -->
-  <div id="orientation-warning">
-    <div style="font-size: 22px; font-weight: 900; margin-bottom: 8px;">ROTATE TO LANDSCAPE</div>
-    <div style="color: #888; font-size: 12px; line-height: 1.5; max-width: 280px;">
-      Hold your phone horizontally with both thumbs to use as a full Xbox Game Controller.
+  <!-- ===================================================================
+       SUPER MINIMALIST PRESET SWITCHER: JUST TWO BUTTONS [ 1 ] AND [ 2 ]
+       =================================================================== -->
+  <div class="settings-modal-backdrop" id="settings-modal" style="display:none;">
+    <div class="settings-minimal-card">
+      <button class="preset-choice-btn active" id="btn-preset-1">1</button>
+      <button class="preset-choice-btn" id="btn-preset-2">2</button>
     </div>
   </div>
 
   <!-- Start Modal -->
   <div class="modal-backdrop" id="engage-modal">
     <div class="modal-card">
-      <div style="font-size: 14px; font-weight: 900; letter-spacing: 0.08em; color: #fff;">
-        PROJECT CONTROLLER // READY
+      <div class="modal-logo-wrap">
+        <img src="logo.png" alt="Controller" class="modal-logo">
       </div>
-      <div style="font-size: 12px; color: #888; line-height: 1.6;">
-        • <b>Floating Joystick</b>: Touch anywhere on the left half to steer<br>
-        • <b>Triggers</b>: Tap or hold RT (Drive) & LT (Brake)<br>
-        • <b>Action Buttons</b>: Huge A (Jump), B (Boost), X (Slide), Y (Cam)<br>
-        • <b>Gyro Steering</b>: Toggle on/off at any time
-      </div>
-      <button class="primary-btn" id="engage-btn">START CONTROLLER</button>
+      <div class="modal-title">Controller</div>
+      <div class="modal-subtitle">VERSION 1.0.0 // LOW LATENCY ESPORTS GAMEPAD</div>
+      <button class="primary-btn" id="engage-btn">START</button>
     </div>
   </div>
 

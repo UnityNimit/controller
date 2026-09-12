@@ -114,7 +114,16 @@ def test_sensor_fusion_pipeline():
     assert stick_x == 0
     assert filtered == 0.0
 
-    # Triggers processing
+    # Triggers processing: full press, partial press, and clean release to zero
     th_byte, br_byte = pipeline.process_triggers(1.0, 0.0)
-    assert th_byte > 0
+    assert th_byte == 255
+    assert br_byte == 0
+
+    th_byte, br_byte = pipeline.process_triggers(0.0, 1.0)
+    assert th_byte == 0
+    assert br_byte == 255
+
+    # Critical: releasing to 0.0 must immediately output (0, 0) with ZERO lag/ghosting
+    th_byte, br_byte = pipeline.process_triggers(0.0, 0.0)
+    assert th_byte == 0
     assert br_byte == 0
