@@ -184,7 +184,8 @@ html, body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-body.forced-landscape-portrait #controller-app {
+body.forced-landscape-portrait #controller-app,
+body.forced-landscape-portrait .splash-screen {
   width: 100vh !important;
   width: 100dvh !important;
   height: 100vw !important;
@@ -198,7 +199,8 @@ body.forced-landscape-portrait #controller-app {
 }
 
 @media (orientation: portrait) {
-  #controller-app {
+  #controller-app,
+  .splash-screen {
     width: 100vh !important;
     width: 100dvh !important;
     height: 100vw !important;

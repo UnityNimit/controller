@@ -240,6 +240,7 @@ class GamepadClient {
     // Splash Entrance & Morph Animation State
     this._isEngaging = false;
     this._isEngaged = false;
+    this.autoAdvanceTimer = null;
 
     // Motion & Gyro
     this.gyroEnabled = true;
@@ -385,6 +386,10 @@ class GamepadClient {
             e.stopPropagation();
           } catch (_) {}
         }
+        if (this.autoAdvanceTimer) {
+          clearTimeout(this.autoAdvanceTimer);
+          this.autoAdvanceTimer = null;
+        }
         this.engage();
       };
 
@@ -404,6 +409,13 @@ class GamepadClient {
         splashImg.addEventListener("touchstart", handleSplash, { passive: false });
         splashImg.addEventListener("click", handleSplash);
       }
+
+      // Automatically move to Layout 1 after 5 sec fixed no matter what
+      this.autoAdvanceTimer = setTimeout(() => {
+        if (!this._isEngaged && !this._isEngaging) {
+          this.engage();
+        }
+      }, 5000);
     }
 
     // Center Logo in Layout 1 -> Hold (>=600ms) to Customize/Save, Tap (<600ms) to Switch to Layout 2
@@ -665,6 +677,10 @@ class GamepadClient {
   }
 
   async engage() {
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
     if (this._isEngaging || this._isEngaged) return;
     this._isEngaging = true;
 
@@ -1386,17 +1402,6 @@ class GamepadClient {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
-}
-
-// Instantiate on load
-window.addEventListener("DOMContentLoaded", () => {
-  window.gamepadClient = new GamepadClient();
-  window.addEventListener("resize", () => {
-    if (window.gamepadClient) window.gamepadClient.checkOrientation();
-  });
-  window.addEventListener("orientationchange", () => {
-    if (window.gamepadClient) window.gamepadClient.checkOrientation();
-  });
 
   // =========================================================================
   // LAYOUT 1 CUSTOMIZATION ENGINE (DRAG, RESIZE, JOYSTICK RADIUS & STORAGE)
@@ -1694,5 +1699,21 @@ window.addEventListener("DOMContentLoaded", () => {
       this.haptics.triggerClick("heavy");
     } catch (_) {}
   }
-
 }
+
+// Instantiate on load
+window.addEventListener("DOMContentLoaded", () => {
+  window.gamepadClient = new GamepadClient();
+  window.addEventListener("resize", () => {
+    if (window.gamepadClient) window.gamepadClient.checkOrientation();
+  });
+  window.addEventListener("orientationchange", () => {
+    if (window.gamepadClient) window.gamepadClient.checkOrientation();
+  });
+  window.addEventListener("pointerdown", () => {
+    if (window.gamepadClient && window.gamepadClient._isEngaged) {
+      window.gamepadClient.toggleFullscreen();
+      window.gamepadClient.lockOrientationLandscape().catch(() => {});
+    }
+  }, { passive: true });
+});

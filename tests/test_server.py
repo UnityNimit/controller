@@ -318,6 +318,14 @@ def test_splash_screen_morph_and_layout1_guarantee():
         assert "touchstart" in js
         assert "this.switchLayout(1, false)" in js
         assert "_isEngaging" in js
+        assert "autoAdvanceTimer" in js
+        assert "5000" in js
+
+        # 4. Verify JavaScript syntax integrity
+        import subprocess, shutil
+        if shutil.which("node"):
+            res = subprocess.run(["node", "-c", "client/js/cockpit.js"], capture_output=True, text=True)
+            assert res.returncode == 0, f"JS Syntax Error: {res.stderr}"
 
     asyncio.run(_test())
 
