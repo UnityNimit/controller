@@ -1,7 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('client', 'client'), ('scripts/ViGEmBusSetup_x64.msi', '.'), ('scripts/ViGEmBusSetup_x64.msi', 'scripts'), ('gui/logo.png', 'gui'), ('gui/logo.png', '.'), ('gui/logo.ico', 'gui'), ('gui/logo.ico', '.')]
+datas = [
+    ('client', 'client'),
+    ('scripts/ViGEmBusSetup_x64.msi', '.'),
+    ('scripts/ViGEmBusSetup_x64.msi', 'scripts'),
+    ('scripts/viva_defense_suite.py', 'scripts'),
+    ('scripts/viva_defense_suite.py', '.'),
+    ('gui/logo.png', 'gui'),
+    ('gui/logo.png', '.'),
+    ('gui/logo.ico', 'gui'),
+    ('gui/logo.ico', '.')
+]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('vgamepad')
