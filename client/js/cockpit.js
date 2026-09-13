@@ -213,7 +213,7 @@ class GamepadClient {
     this.security = new SecurityEngine();
     this.ws = null;
     this.connected = false;
-    this.playerSlot = parseInt(localStorage.getItem("controller_preferred_slot") || "1", 10);
+    this.playerSlot = 1;
     this.isRotated = false;
     this.seq = 0;
 
@@ -784,7 +784,7 @@ class GamepadClient {
       try {
         const msg = JSON.parse(evt.data);
         if (msg.type === "AUTH_CHALLENGE") {
-          const prefSlot = parseInt(localStorage.getItem("controller_preferred_slot") || "1", 10);
+          const prefSlot = 1;
           const authResponse = this.security.solveChallenge(msg.nonce, msg.timestamp, this.clientId, prefSlot);
           this.ws.send(JSON.stringify(authResponse));
         } else if (msg.type === "AUTH_SUCCESS") {

@@ -146,3 +146,31 @@ def test_qos_recorder_and_export(tmp_path: Path):
     for c in charts:
         assert c.exists()
         assert c.stat().st_size > 0
+
+
+def test_first_client_always_player1_guarantee():
+    mgr = InputManager(force_mock=True, max_players=4)
+
+    # 1. First client connecting without preference ALWAYS gets Player 1 (Slot 0)
+    assert mgr.allocate_slot("client_first") == 0
+
+    # 2. Second client gets Player 2 (Slot 1)
+    assert mgr.allocate_slot("client_second") == 1
+
+    # 3. Disconnect Player 1 while Player 2 is still playing
+    mgr.release_slot("client_first")
+    assert mgr.slots[0] is None
+    assert mgr.slots[1] == "client_second"
+
+    # 4. Incoming new client immediately fills open Player 1 (Slot 0)
+    assert mgr.allocate_slot("client_third") == 0
+
+    # 5. Now disconnect all players (server becomes completely empty)
+    mgr.release_slot("client_second")
+    mgr.release_slot("client_third")
+    assert all(s is None for s in mgr.slots)
+
+    # 6. Even if a client connects with preferred_slot=3, when it is the first/only client,
+    # it is GUARANTEED to connect as Player 1 (Slot 0)
+    assert mgr.allocate_slot("client_solo_with_pref", preferred_slot=2) == 0
+

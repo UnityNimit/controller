@@ -391,15 +391,40 @@ class InputManager:
 
     def allocate_slot(self, client_id: str, preferred_slot: Optional[int] = None) -> Optional[int]:
         """
-        Assigns a player slot with persistent device leasing and user preference support.
-        Guarantees that reconnecting clients reclaim their exact previous slot.
+        Assigns a player slot with first-connection Player 1 guarantee and persistent device leasing.
+        When the first client connects (no active clients), it ALWAYS connects as Player 1 (Slot 0).
         """
         # 1. Check if already actively assigned
         for idx, owner in enumerate(self.slots):
             if owner == client_id:
                 return idx
 
-        # 2. Check if client explicitly requested a preferred slot and it is free
+        active_count = sum(1 for owner in self.slots if owner is not None)
+
+        # 2. GUARANTEE: When the first client connects, it ALWAYS connects as Player 1 (Slot 0)
+        if active_count == 0:
+            self.slots[0] = client_id
+            self._client_leases[client_id] = 0
+            self.controllers[0].reset()
+            logger.info(f"First client [{client_id[:8]}] connected -> Guaranteed Player 1 (Slot 0)")
+            return 0
+
+        # 3. If Slot 0 (Player 1) is free, incoming client takes Player 1 unless actively reconnecting to another slot
+        if self.slots[0] is None:
+            if client_id in self._client_leases and self._client_leases[client_id] != 0:
+                leased = self._client_leases[client_id]
+                if 0 <= leased < self.max_players and self.slots[leased] is None and preferred_slot == leased:
+                    self.slots[leased] = client_id
+                    self.controllers[leased].reset()
+                    logger.info(f"Restored Player {leased + 1} slot to reconnecting client [{client_id[:8]}]")
+                    return leased
+            self.slots[0] = client_id
+            self._client_leases[client_id] = 0
+            self.controllers[0].reset()
+            logger.info(f"Assigned free Player 1 (Slot 0) to client [{client_id[:8]}]")
+            return 0
+
+        # 4. Check if client explicitly requested a preferred slot and it is free
         if preferred_slot is not None and 0 <= preferred_slot < self.max_players:
             if self.slots[preferred_slot] is None:
                 self.slots[preferred_slot] = client_id
@@ -408,7 +433,7 @@ class InputManager:
                 logger.info(f"Assigned preferred Player {preferred_slot + 1} slot to client [{client_id[:8]}]")
                 return preferred_slot
 
-        # 3. Check if client has a persistent lease on a slot and that slot is free
+        # 5. Check if client has a persistent lease on a slot and that slot is free
         if client_id in self._client_leases:
             leased_idx = self._client_leases[client_id]
             if 0 <= leased_idx < self.max_players and self.slots[leased_idx] is None:
@@ -417,17 +442,7 @@ class InputManager:
                 logger.info(f"Restored persistent Player {leased_idx + 1} slot to client [{client_id[:8]}]")
                 return leased_idx
 
-        # 4. Find first unallocated slot that is NOT actively leased by another client
-        leased_slots = set(self._client_leases.values())
-        for idx, owner in enumerate(self.slots):
-            if owner is None and idx not in leased_slots:
-                self.slots[idx] = client_id
-                self._client_leases[client_id] = idx
-                self.controllers[idx].reset()
-                logger.info(f"Assigned unreserved Player {idx + 1} slot to client [{client_id[:8]}]")
-                return idx
-
-        # 5. Fallback: claim any empty slot
+        # 6. Fill lowest available slot in sequential order (Player 1 -> Player 2 -> Player 3 -> Player 4)
         for idx, owner in enumerate(self.slots):
             if owner is None:
                 self.slots[idx] = client_id
@@ -473,7 +488,9 @@ class InputManager:
                 self.slots[idx] = None
                 self.controllers[idx].reset()
                 self._last_input_time.pop(client_id, None)
-                logger.info(f"Released Player {idx + 1} slot from client [{client_id[:8]}] (lease preserved)")
+                logger.info(f"Released Player {idx + 1} slot from client [{client_id[:8]}]")
+                if all(s is None for s in self.slots):
+                    self._client_leases.clear()
                 return idx
         return None
 
