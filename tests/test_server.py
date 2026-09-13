@@ -265,6 +265,8 @@ def test_layout1_customization_system():
         assert ".l1-resize-handle" in css_text
         assert ".stick-radius-preview" in css_text
         assert ".customizing-mode .abxy-btn" in css_text
+        assert "--l1-dx" in css_text
+        assert "--l1-press" in css_text
 
         # 3. Test cockpit.js has customization engine methods and input disablement
         resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
@@ -278,6 +280,8 @@ def test_layout1_customization_system():
         assert "resetLayout1Config" in js_text
         assert "controller_layout1_custom_config" in js_text
         assert "if (this.isCustomizingLayout1) return;" in js_text
+        assert "--l1-dx" in js_text
+        assert "--l1-press" in js_text
 
     asyncio.run(_test())
 
@@ -296,26 +300,28 @@ def test_splash_screen_morph_and_layout1_guarantee():
                 self.path = path
                 self.headers = {"host": "127.0.0.1:8106"}
 
-        # 1. Verify index.html contains the splash screen elements
+        # 1. Verify index.html contains the splash screen elements and Rotate to start hint
         resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
         assert resp_index.status_code == 200
         text = resp_index.body.decode("utf-8")
         assert 'id="splash-screen"' in text
         assert 'class="splash-logo-container"' in text
         assert 'class="splash-logo-img"' in text
+        assert 'splash-rotate-hint' in text
+        assert 'Rotate to start' in text
         assert 'id="gamepad-frame"' in text
 
-        # 2. Verify cockpit.css has morph transition classes and blooming entrance
+        # 2. Verify cockpit.css has rotate hint and transition classes
         resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
         assert resp_css.status_code == 200
         css = resp_css.body.decode("utf-8")
+        assert ".splash-rotate-hint" in css
         assert ".splash-morphing" in css
-        assert ".splash-logo-img.morphing" in css
         assert "#gamepad-frame.layout1-entering" in css
         assert ".layout1-blooming" in css
         assert ".morph-complete" in css
 
-        # 3. Verify cockpit.js has responsive pointerdown/touchstart handlers, Layout 1 guarantee, and morph engine
+        # 3. Verify cockpit.js has rotation-to-start detection, responsive touch handlers, and Layout 1 guarantee
         resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
         assert resp_js.status_code == 200
         js = resp_js.body.decode("utf-8")
@@ -324,8 +330,8 @@ def test_splash_screen_morph_and_layout1_guarantee():
         assert "touchstart" in js
         assert "this.switchLayout(1, false)" in js
         assert "_isEngaging" in js
-        assert "autoAdvanceTimer" in js
-        assert "5000" in js
+        assert "checkRotationToStart" in js
+        assert "orientationchange" in js
 
         # 4. Verify JavaScript syntax integrity
         import subprocess, shutil

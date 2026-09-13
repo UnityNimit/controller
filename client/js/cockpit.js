@@ -386,10 +386,6 @@ class GamepadClient {
             e.stopPropagation();
           } catch (_) {}
         }
-        if (this.autoAdvanceTimer) {
-          clearTimeout(this.autoAdvanceTimer);
-          this.autoAdvanceTimer = null;
-        }
         this.engage();
       };
 
@@ -410,12 +406,21 @@ class GamepadClient {
         splashImg.addEventListener("click", handleSplash);
       }
 
-      // Automatically move to Layout 1 after 5 sec fixed no matter what
-      this.autoAdvanceTimer = setTimeout(() => {
-        if (!this._isEngaged && !this._isEngaging) {
+      // Automatically engage fullscreen Layout 1 when rotating device into landscape
+      const checkRotationToStart = () => {
+        if (this._isEngaged || this._isEngaging) return;
+        const isLandscape = (window.innerWidth > window.innerHeight) ||
+          (window.screen && window.screen.orientation && window.screen.orientation.type && window.screen.orientation.type.includes("landscape"));
+        if (isLandscape) {
           this.engage();
         }
-      }, 5000);
+      };
+
+      window.addEventListener("orientationchange", checkRotationToStart);
+      if (window.screen && window.screen.orientation) {
+        window.screen.orientation.addEventListener("change", checkRotationToStart);
+      }
+      window.addEventListener("resize", checkRotationToStart);
     }
 
     // Center Logo in Layout 1 -> Hold (>=600ms) to Customize/Save, Tap (<600ms) to Switch to Layout 2
@@ -677,10 +682,6 @@ class GamepadClient {
   }
 
   async engage() {
-    if (this.autoAdvanceTimer) {
-      clearTimeout(this.autoAdvanceTimer);
-      this.autoAdvanceTimer = null;
-    }
     if (this._isEngaging || this._isEngaged) return;
     this._isEngaging = true;
 
@@ -689,7 +690,7 @@ class GamepadClient {
     localStorage.setItem("controller_active_layout", "1");
     this.switchLayout(1, false);
 
-    // 2. Launch smooth logo morph and controls bloom animation
+    // 2. Transition cleanly to Layout 1
     this._startMorphAnimation();
 
     // 3. Concurrently initialize fullscreen, orientation lock, audio, and sensors
@@ -715,93 +716,29 @@ class GamepadClient {
   }
 
   _startMorphAnimation() {
-    const splashScreen = this.dom.splashScreen;
-    const splashLogo = splashScreen ? splashScreen.querySelector(".splash-logo-img") : null;
-    const frame = this.dom.frame;
-    const targetLogo = document.querySelector("#btn-settings-logo .center-logo-img") || this.dom.btnSettingsLogo;
+    const splashScreen = this.dom.splashScreen || document.getElementById("splash-screen");
+    const frame = this.dom.frame || document.getElementById("gamepad-frame");
 
-    if (!splashScreen || !splashLogo) {
-      if (splashScreen) {
-        splashScreen.classList.add("hidden");
-        splashScreen.style.display = "none";
-      }
-      this._isEngaged = true;
-      this._isEngaging = false;
-      return;
-    }
-
-    // Set initial entering state on Layout 1 controls
-    if (frame) {
-      frame.classList.add("layout1-entering");
-      frame.classList.remove("layout1-blooming", "morph-complete");
-      void frame.offsetHeight; // Force layout reflow
-    }
-
-    // Measure viewport coordinates
-    const splashRect = splashLogo.getBoundingClientRect();
-    const targetRect = targetLogo ? targetLogo.getBoundingClientRect() : null;
-
-    let deltaX = 0;
-    let deltaY = 0;
-    let scale = 0.354;
-    let rotation = 0;
-
-    if (splashRect.width > 0 && targetRect && targetRect.width > 0) {
-      const splashCenterX = splashRect.left + splashRect.width / 2;
-      const splashCenterY = splashRect.top + splashRect.height / 2;
-      const targetCenterX = targetRect.left + targetRect.width / 2;
-      const targetCenterY = targetRect.top + targetRect.height / 2;
-
-      deltaX = targetCenterX - splashCenterX;
-      deltaY = targetCenterY - splashCenterY;
-      scale = targetRect.width / splashRect.width;
-    } else {
-      deltaX = 0;
-      deltaY = -window.innerHeight * 0.38;
-      scale = 0.354;
-    }
-
-    if (this.isRotated) {
-      rotation = 90;
-    }
-
-    // Tactile feedback at start of glide
-    this.haptics.triggerClick("medium");
-
-    // Start 60fps hardware-accelerated morph transition
-    requestAnimationFrame(() => {
+    if (splashScreen) {
       splashScreen.classList.add("splash-morphing");
-      splashLogo.classList.add("morphing");
-      splashLogo.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scale}) rotate(${rotation}deg)`;
-      splashLogo.style.filter = "drop-shadow(0 0 10px rgba(255, 255, 255, 0.75))";
-
-      if (frame) {
-        frame.classList.add("layout1-blooming");
-      }
-    });
-
-    // Touchdown sequence when logo lands in Layout 1 slot
-    setTimeout(() => {
-      if (frame) {
-        frame.classList.add("morph-complete");
-      }
-
-      if (splashScreen) {
-        splashScreen.classList.add("hidden");
-        splashScreen.style.display = "none";
-      }
-
+      splashScreen.classList.add("hidden");
       setTimeout(() => {
-        if (frame) {
-          frame.classList.remove("layout1-entering", "layout1-blooming", "morph-complete");
-        }
-      }, 60);
+        splashScreen.style.display = "none";
+      }, 300);
+    }
 
-      this.haptics.triggerClick("heavy");
-      this.updateLayoutScaling();
-      this._isEngaged = true;
-      this._isEngaging = false;
-    }, 650);
+    if (frame) {
+      frame.classList.add("layout1-blooming");
+      frame.classList.add("morph-complete");
+      setTimeout(() => {
+        frame.classList.remove("layout1-entering", "layout1-blooming", "morph-complete");
+      }, 350);
+    }
+
+    this.haptics.triggerClick("heavy");
+    this.updateLayoutScaling();
+    this._isEngaged = true;
+    this._isEngaging = false;
   }
 
   _attachMotionSensors() {
@@ -1713,7 +1650,10 @@ class GamepadClient {
     const el = document.querySelector(`[data-custom-id="${id}"]`);
     if (!el) return;
     const cfg = this._getElemConfig(id);
-    el.style.transform = `translate(${cfg.dx}px, ${cfg.dy}px) scale(${cfg.s})`;
+    el.style.setProperty("--l1-dx", `${cfg.dx}px`);
+    el.style.setProperty("--l1-dy", `${cfg.dy}px`);
+    el.style.setProperty("--l1-s", `${cfg.s}`);
+    el.style.transform = `translate(var(--l1-dx, ${cfg.dx}px), var(--l1-dy, ${cfg.dy}px)) scale(calc(var(--l1-s, ${cfg.s}) * var(--l1-press, 1)))`;
   }
 
   _setElemTranslate(id, dx, dy) {
@@ -1779,6 +1719,9 @@ class GamepadClient {
 
       document.querySelectorAll("[data-custom-id]").forEach((el) => {
         el.style.transform = "";
+        el.style.removeProperty("--l1-dx");
+        el.style.removeProperty("--l1-dy");
+        el.style.removeProperty("--l1-s");
       });
 
       const leftRing = document.getElementById("left-stick-radius-preview");
