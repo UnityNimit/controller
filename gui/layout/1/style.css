@@ -678,11 +678,20 @@ body.forced-landscape-portrait .splash-screen {
 .customizing-mode .circle-gyro,
 .customizing-mode .circle-stick-anchor,
 .customizing-mode .dpad-circle-cluster,
-.customizing-mode .abxy-circle-cluster {
+.customizing-mode .abxy-circle-cluster,
+.customizing-mode .abxy-btn,
+.customizing-mode .dpad-btn {
   border-color: var(--cyan-neon) !important;
   box-shadow: 0 0 16px var(--cyan-glow), inset 0 0 12px var(--cyan-dim) !important;
   cursor: move !important;
   touch-action: none !important;
+  overflow: visible !important;
+}
+
+.customizing-mode .circle-btn:active,
+.customizing-mode .circle-btn.active {
+  background: #ffffff !important;
+  box-shadow: 0 0 24px var(--cyan-neon), 0 0 40px var(--cyan-glow) !important;
 }
 
 .customizing-mode .circle-btn .btn-text {

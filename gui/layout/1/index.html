@@ -57,43 +57,53 @@
           <div class="l1-resize-handle" data-target="left-stick-anchor"></div>
         </div>
 
-        <div class="dpad-circle-cluster" id="left-dpad-cluster">
-          <button class="circle-btn dpad-btn" id="dpad-up" data-dir="DPAD_UP" title="D-Pad Up">
+        <div class="dpad-circle-cluster" id="left-dpad-cluster" data-custom-id="left-dpad-cluster">
+          <div class="l1-resize-handle" data-target="left-dpad-cluster" title="Resize D-Pad Cluster"></div>
+          <button class="circle-btn dpad-btn" id="dpad-up" data-dir="DPAD_UP" data-custom-id="dpad-up" title="D-Pad Up">
             <span class="btn-text">▲</span>
+            <div class="l1-resize-handle" data-target="dpad-up" title="Resize D-Up"></div>
           </button>
-          <button class="circle-btn dpad-btn" id="dpad-left" data-dir="DPAD_LEFT" title="D-Pad Left">
+          <button class="circle-btn dpad-btn" id="dpad-left" data-dir="DPAD_LEFT" data-custom-id="dpad-left" title="D-Pad Left">
             <span class="btn-text">◀</span>
+            <div class="l1-resize-handle" data-target="dpad-left" title="Resize D-Left"></div>
           </button>
-          <button class="circle-btn dpad-btn" id="dpad-right" data-dir="DPAD_RIGHT" title="D-Pad Right">
+          <button class="circle-btn dpad-btn" id="dpad-right" data-dir="DPAD_RIGHT" data-custom-id="dpad-right" title="D-Pad Right">
             <span class="btn-text">▶</span>
+            <div class="l1-resize-handle" data-target="dpad-right" title="Resize D-Right"></div>
           </button>
-          <button class="circle-btn dpad-btn" id="dpad-down" data-dir="DPAD_DOWN" title="D-Pad Down">
+          <button class="circle-btn dpad-btn" id="dpad-down" data-dir="DPAD_DOWN" data-custom-id="dpad-down" title="D-Pad Down">
             <span class="btn-text">▼</span>
+            <div class="l1-resize-handle" data-target="dpad-down" title="Resize D-Down"></div>
           </button>
         </div>
       </div>
 
       <!-- RIGHT WING: Circular ABXY Diamond + Circular Right Stick -->
       <div class="gamepad-module mod-right-wing" id="mod-right-wing">
-        <div class="abxy-circle-cluster" id="right-abxy-cluster">
-          <button class="circle-btn abxy-btn" id="btn-y" data-btn="Y" title="Y Button">
+        <div class="abxy-circle-cluster" id="right-abxy-cluster" data-custom-id="right-abxy-cluster">
+          <div class="l1-resize-handle" data-target="right-abxy-cluster" title="Resize ABXY Cluster"></div>
+          <button class="circle-btn abxy-btn" id="btn-y" data-btn="Y" data-custom-id="btn-y" title="Y Button">
             <span class="btn-text">Y</span>
+            <div class="l1-resize-handle" data-target="btn-y" title="Resize Y"></div>
           </button>
-          <button class="circle-btn abxy-btn" id="btn-x" data-btn="X" title="X Button">
+          <button class="circle-btn abxy-btn" id="btn-x" data-btn="X" data-custom-id="btn-x" title="X Button">
             <span class="btn-text">X</span>
+            <div class="l1-resize-handle" data-target="btn-x" title="Resize X"></div>
           </button>
-          <button class="circle-btn abxy-btn" id="btn-b" data-btn="B" title="B Button">
+          <button class="circle-btn abxy-btn" id="btn-b" data-btn="B" data-custom-id="btn-b" title="B Button">
             <span class="btn-text">B</span>
+            <div class="l1-resize-handle" data-target="btn-b" title="Resize B"></div>
           </button>
-          <button class="circle-btn abxy-btn" id="btn-a" data-btn="A" title="A Button">
+          <button class="circle-btn abxy-btn" id="btn-a" data-btn="A" data-custom-id="btn-a" title="A Button">
             <span class="btn-text">A</span>
+            <div class="l1-resize-handle" data-target="btn-a" title="Resize A"></div>
           </button>
         </div>
 
-        <div class="stick-anchor circle-stick-anchor" id="right-stick-anchor">
+        <div class="stick-anchor circle-stick-anchor" id="right-stick-anchor" data-custom-id="right-stick-anchor">
           <div class="stick-radius-preview" id="right-stick-radius-preview"></div>
           <div class="stick-single-circle red-puck" id="right-stick-puck"></div>
-          <div class="l1-resize-handle" data-target="right-stick-anchor"></div>
+          <div class="l1-resize-handle" data-target="right-stick-anchor" title="Drag to Resize"></div>
         </div>
       </div>
 
@@ -117,7 +127,7 @@
           <span class="l1-radius-val" id="l1-radius-val">40px</span>
         </div>
         <div class="l1-radius-slider-wrap">
-          <input type="range" class="l1-radius-slider" id="l1-radius-slider" min="24" max="75" step="1" value="40">
+          <input type="range" class="l1-radius-slider" id="l1-radius-slider" min="20" max="85" step="1" value="40">
         </div>
         <button class="l1-radius-close-btn" id="l1-radius-close-btn" type="button">DONE</button>
       </div>

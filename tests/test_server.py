@@ -250,6 +250,10 @@ def test_layout1_customization_system():
         assert "left-stick-radius-preview" in text
         assert "right-stick-radius-preview" in text
         assert "data-custom-id" in text
+        assert 'data-custom-id="btn-y"' in text
+        assert 'data-custom-id="btn-x"' in text
+        assert 'data-custom-id="btn-b"' in text
+        assert 'data-custom-id="btn-a"' in text
 
         # 2. Test cockpit.css contains customizing-mode styles and cyan variables
         resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
@@ -260,8 +264,9 @@ def test_layout1_customization_system():
         assert ".l1-radius-popup" in css_text
         assert ".l1-resize-handle" in css_text
         assert ".stick-radius-preview" in css_text
+        assert ".customizing-mode .abxy-btn" in css_text
 
-        # 3. Test cockpit.js has customization engine methods
+        # 3. Test cockpit.js has customization engine methods and input disablement
         resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
         assert resp_js.status_code == 200
         js_text = resp_js.body.decode("utf-8")
@@ -272,6 +277,7 @@ def test_layout1_customization_system():
         assert "_saveLayout1Config" in js_text
         assert "resetLayout1Config" in js_text
         assert "controller_layout1_custom_config" in js_text
+        assert "if (this.isCustomizingLayout1) return;" in js_text
 
     asyncio.run(_test())
 

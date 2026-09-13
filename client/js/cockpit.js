@@ -875,6 +875,7 @@ class GamepadClient {
   }
 
   sendInputNow(isCritical = false) {
+    if (this.isCustomizingLayout1) return;
     if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
     const now = performance.now();
@@ -976,6 +977,7 @@ class GamepadClient {
   }
 
   _setButtonState(key, isPressed) {
+    if (this.isCustomizingLayout1) return;
     if (key === "LT") {
       this.brake = isPressed ? 1.0 : 0.0;
     } else if (key === "RT") {
@@ -1026,6 +1028,7 @@ class GamepadClient {
     const bindLeftStickAnchor = (anchor) => {
       if (!anchor) return;
       anchor.addEventListener("pointerdown", (e) => {
+        if (this.isCustomizingLayout1) return;
         e.preventDefault();
         e.stopPropagation();
         if (this.leftStickPointerId !== null) return;
@@ -1064,6 +1067,7 @@ class GamepadClient {
     const bindRightStickAnchor = (anchor) => {
       if (!anchor) return;
       anchor.addEventListener("pointerdown", (e) => {
+        if (this.isCustomizingLayout1) return;
         e.preventDefault();
         e.stopPropagation();
         if (this.rightStickPointerId !== null) return;
@@ -1139,6 +1143,7 @@ class GamepadClient {
     };
 
     const handleButtonPointerUp = (e) => {
+      if (this.isCustomizingLayout1) return;
       if (e.pointerId === this.leftStickPointerId) {
         resetLeftStick();
         return;
@@ -1202,6 +1207,7 @@ class GamepadClient {
   }
 
   _updateLeftStickFromPointer(clientX, clientY, customBase, customPuck) {
+    if (this.isCustomizingLayout1) return;
     const isL2 = this.currentLayout === 2;
     const baseEl = customBase || (isL2 ? document.getElementById("l2-left-stick-anchor") : this.dom.leftStickAnchor);
     const puckEl = customPuck || (isL2 ? document.getElementById("l2-left-stick-puck") : this.dom.leftStickPuck);
@@ -1270,6 +1276,7 @@ class GamepadClient {
   }
 
   _updateRightStickFromPointer(clientX, clientY, customBase, customPuck) {
+    if (this.isCustomizingLayout1) return;
     const isL2 = this.currentLayout === 2;
     const baseEl = customBase || (isL2 ? document.getElementById("l2-right-stick-anchor") : this.dom.rightStickAnchor);
     const puckEl = customPuck || (isL2 ? document.getElementById("l2-right-stick-puck") : this.dom.rightStickPuck);
@@ -1418,6 +1425,48 @@ class GamepadClient {
     if (this.isCustomizingLayout1) {
       this.haptics.initAudio();
       this.closeRadiusPopup();
+
+      // Completely disable and neutralize all gaming input state
+      this.leftStickActive = false;
+      this.leftStickPointerId = null;
+      this.stickX = 0;
+      this.stickY = 0;
+      this.rightStickActive = false;
+      this.rightStickPointerId = null;
+      this.rightStickX = 0;
+      this.rightStickY = 0;
+      this.throttle = 0.0;
+      this.brake = 0.0;
+      this.directBtnPointers.clear();
+      for (const k in this.buttons) {
+        this.buttons[k] = false;
+      }
+      if (this.buttonElements) {
+        document.querySelectorAll("[data-btn], [data-dir], [data-trigger]").forEach(el => el.classList.remove("active"));
+      }
+      if (this.dom.leftStickPuck) this.dom.leftStickPuck.style.transform = "translate(0px, 0px)";
+      if (this.dom.rightStickPuck) this.dom.rightStickPuck.style.transform = "translate(0px, 0px)";
+
+      // Send neutral frame to game server
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const neutralPacket = {
+          type: "INPUT",
+          seq: ++this.seq,
+          client_id: this.clientId,
+          slot: this.playerSlot,
+          gyro_enabled: false,
+          angle: 0.0,
+          stick_x: 0,
+          stick_y: 0,
+          right_stick_x: 0,
+          right_stick_y: 0,
+          throttle: 0.0,
+          brake: 0.0,
+          rtt: this.rtt || 0,
+          buttons: this.buttons
+        };
+        try { this.ws.send(JSON.stringify(neutralPacket)); } catch (_) {}
+      }
     } else {
       this.closeRadiusPopup();
       this._saveLayout1Config();
@@ -1455,11 +1504,12 @@ class GamepadClient {
         if (!targetEl) return;
 
         const cfg = this._getElemConfig(targetId);
+        const pt = this.getGamepadPoint(e.clientX, e.clientY);
         activeDrag = {
           id: targetId,
           el: targetEl,
-          startX: e.clientX,
-          startY: e.clientY,
+          startX: pt.x,
+          startY: pt.y,
           origDx: cfg.dx,
           origDy: cfg.dy,
           origScale: cfg.s,
@@ -1475,12 +1525,13 @@ class GamepadClient {
         e.stopPropagation();
         const targetId = customEl.dataset.customId;
         const cfg = this._getElemConfig(targetId);
+        const pt = this.getGamepadPoint(e.clientX, e.clientY);
 
         activeDrag = {
           id: targetId,
           el: customEl,
-          startX: e.clientX,
-          startY: e.clientY,
+          startX: pt.x,
+          startY: pt.y,
           origDx: cfg.dx,
           origDy: cfg.dy,
           origScale: cfg.s,
@@ -1494,8 +1545,9 @@ class GamepadClient {
       if (!this.isCustomizingLayout1 || !activeDrag) return;
       e.preventDefault();
 
-      const dx = e.clientX - activeDrag.startX;
-      const dy = e.clientY - activeDrag.startY;
+      const pt = this.getGamepadPoint(e.clientX, e.clientY);
+      const dx = pt.x - activeDrag.startX;
+      const dy = pt.y - activeDrag.startY;
       if (Math.hypot(dx, dy) > 6) {
         activeDrag.moved = true;
       }
@@ -1503,7 +1555,7 @@ class GamepadClient {
       if (activeDrag.isResize) {
         const delta = (dx + dy) / 2;
         const scaleChange = delta / 110;
-        const newScale = Math.max(0.65, Math.min(1.75, activeDrag.origScale + scaleChange));
+        const newScale = Math.max(0.60, Math.min(1.85, activeDrag.origScale + scaleChange));
         this._setElemScale(activeDrag.id, newScale);
       } else {
         const newDx = activeDrag.origDx + dx;
@@ -1526,10 +1578,36 @@ class GamepadClient {
       activeDrag = null;
     });
 
+    // Dedicated Tap-to-Open Slider Listeners for Joysticks
+    const setupStickTap = (anchorEl, stickSide) => {
+      if (!anchorEl) return;
+      let downTime = 0;
+      let startX = 0, startY = 0;
+      anchorEl.addEventListener("pointerdown", (e) => {
+        if (!this.isCustomizingLayout1) return;
+        if (e.target.closest(".l1-resize-handle")) return;
+        downTime = performance.now();
+        startX = e.clientX;
+        startY = e.clientY;
+      });
+      anchorEl.addEventListener("pointerup", (e) => {
+        if (!this.isCustomizingLayout1 || !downTime) return;
+        if (e.target.closest(".l1-resize-handle")) return;
+        const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+        const elapsed = performance.now() - downTime;
+        downTime = 0;
+        if (dist < 12 && elapsed < 450) {
+          this.openRadiusPopup(stickSide, anchorEl);
+        }
+      });
+    };
+    setupStickTap(this.dom.leftStickAnchor, "left");
+    setupStickTap(this.dom.rightStickAnchor, "right");
+
     // Joystick Radius Slider Event
     const slider = document.getElementById("l1-radius-slider");
     if (slider) {
-      slider.addEventListener("input", (e) => {
+      const handleSliderChange = (e) => {
         const val = parseInt(e.target.value, 10);
         if (this._activeRadiusPopupStick) {
           this.customStickRadius[this._activeRadiusPopupStick] = val;
@@ -1541,8 +1619,11 @@ class GamepadClient {
             previewRing.style.width = `${val * 2}px`;
             previewRing.style.height = `${val * 2}px`;
           }
+          this.haptics.triggerClick("dpad");
         }
-      });
+      };
+      slider.addEventListener("input", handleSliderChange);
+      slider.addEventListener("change", handleSliderChange);
     }
 
     // Close Button on Radius Slider Popup
@@ -1573,18 +1654,34 @@ class GamepadClient {
     if (!popup || !anchorEl) return;
 
     const currentR = this.customStickRadius[stick] || 40;
-    if (title) title.textContent = `${stick.toUpperCase()} STICK RADIUS`;
+    if (title) title.textContent = `${stick.toUpperCase()} STICK DRAG RADIUS`;
     if (valLabel) valLabel.textContent = `${currentR}px`;
-    if (slider) slider.value = currentR;
+    if (slider) {
+      slider.min = "20";
+      slider.max = "85";
+      slider.value = currentR;
+    }
 
-    const rect = anchorEl.getBoundingClientRect();
-    const frameRect = (this.dom.frame || document.getElementById("gamepad-frame")).getBoundingClientRect();
+    const frame = this.dom.frame || document.getElementById("gamepad-frame");
+    let localX = anchorEl.offsetLeft;
+    let localY = anchorEl.offsetTop;
+    let parent = anchorEl.offsetParent;
+    while (parent && parent !== frame) {
+      localX += parent.offsetLeft;
+      localY += parent.offsetTop;
+      parent = parent.offsetParent;
+    }
 
-    let top = (rect.top - frameRect.top) - 85;
-    let left = (rect.left - frameRect.left) - 20;
-    if (top < 10) top = (rect.bottom - frameRect.top) + 12;
-    if (left < 10) left = 10;
-    if (left + 220 > frameRect.width) left = Math.max(10, frameRect.width - 230);
+    const frameW = frame.clientWidth || 907;
+    const frameH = frame.clientHeight || 400;
+
+    let top = localY - 95;
+    if (top < 15) top = localY + (anchorEl.clientHeight || 140) + 12;
+    top = Math.max(15, Math.min(frameH - 120, top));
+
+    let left = localX - 25;
+    if (left + 235 > frameW) left = frameW - 245;
+    left = Math.max(15, left);
 
     popup.style.top = `${top}px`;
     popup.style.left = `${left}px`;
