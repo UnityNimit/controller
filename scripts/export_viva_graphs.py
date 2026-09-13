@@ -18,8 +18,10 @@ from gateway.filters import SensorFusionPipeline
 from gateway.qos_recorder import QoSRecorder
 
 def generate_viva_figures():
-    output_dir = BASE_DIR / "benchmark_results"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir = BASE_DIR / "documentation" / "figures"
+    data_dir = BASE_DIR / "documentation" / "data"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
     recorder = QoSRecorder(capacity=5000)
     pipeline = SensorFusionPipeline(ema_alpha=0.35, deadband_deg=1.2)
 
@@ -59,12 +61,12 @@ def generate_viva_figures():
         )
 
     # Export CSV
-    csv_file = output_dir / "qos_telemetry_dataset.csv"
+    csv_file = data_dir / "qos_telemetry_dataset.csv"
     recorder.export_csv(csv_file)
     print(f"[+] Exported raw dataset to: {csv_file}")
 
     # Export Figures
-    charts = recorder.export_viva_charts(output_dir)
+    charts = recorder.export_viva_charts(figures_dir)
     for c in charts:
         print(f"[+] Generated Academic Figure: {c}")
 
@@ -76,7 +78,7 @@ def generate_viva_figures():
     print(f"  95th Percentile Jitter: {metrics['p95_jitter_ms']} ms")
     print(f"  Effective Frame Rate  : {metrics['effective_rate_hz']} Hz")
     print("=" * 70)
-    print("[OK] All viva defense performance artifacts ready in benchmark_results/\n")
+    print("[OK] All viva defense performance artifacts ready in documentation/\n")
 
 if __name__ == "__main__":
     generate_viva_figures()

@@ -33,6 +33,7 @@ logs/
 *.log
 *.pcap
 *.csv
+!documentation/data/*.csv
 benchmark_results/
 
 # Certificates
