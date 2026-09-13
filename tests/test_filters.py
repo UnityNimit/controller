@@ -127,3 +127,45 @@ def test_sensor_fusion_pipeline():
     th_byte, br_byte = pipeline.process_triggers(0.0, 0.0)
     assert th_byte == 0
     assert br_byte == 0
+
+
+def test_state_space_kalman_filter():
+    from gateway.filters import StateSpaceKalmanFilter1D
+    kf = StateSpaceKalmanFilter1D(q_pos=0.1, q_vel=2.0, r_meas=1.5, initial_val=0.0)
+
+    # Initial update
+    angle, vel = kf.update(0.0, timestamp=0.0)
+    assert angle == 0.0
+    assert vel == 0.0
+
+    # Step response with noisy measurements
+    # Over 20 iterations at 60Hz (dt = 0.0166s), angle moves toward 15.0 deg
+    t = 0.0
+    for i in range(1, 21):
+        t += 0.0166
+        # Simulate noisy sensor measurement: true 15.0 + alternating noise
+        noise = 1.0 if (i % 2 == 0) else -1.0
+        angle, vel = kf.update(15.0 + noise, timestamp=t)
+
+    # Kalman filter should converge near 15.0 and reject high frequency alternating noise
+    assert 13.5 < angle < 16.5
+    # Covariance matrix P should be strictly positive definite
+    assert kf.p[0][0] > 0.0
+    assert kf.p[1][1] > 0.0
+
+
+def test_dead_reckoning_extrapolation():
+    from gateway.filters import StateSpaceKalmanFilter1D
+    kf = StateSpaceKalmanFilter1D(q_pos=0.1, q_vel=2.0, r_meas=1.5, initial_val=0.0)
+
+    # Establish steady angular velocity
+    kf.update(0.0, timestamp=0.0)
+    kf.update(1.0, timestamp=0.02)
+    kf.update(2.0, timestamp=0.04)
+
+    # Extrapolate forward by 16ms (simulated delayed packet)
+    current_angle = kf.x[0]
+    extrapolated = kf.predict_extrapolate(0.0166)
+    # Extrapolated angle must be ahead of current filtered estimate in direction of velocity
+    assert extrapolated > current_angle
+    assert kf.x[1] > 0.0

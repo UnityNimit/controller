@@ -32,6 +32,8 @@ class ControllerSlotState:
     brake: int = 0
     buttons: Dict[str, bool] = field(default_factory=dict)
     # Dedicated per-slot time-series ring buffers
+    protocol: str = "BINARY v2"
+    filter_mode: str = "KALMAN"
     latency_history: deque = field(default_factory=lambda: deque(maxlen=80))
     stick_x_history: deque = field(default_factory=lambda: deque(maxlen=80))
     stick_y_history: deque = field(default_factory=lambda: deque(maxlen=80))
@@ -102,6 +104,16 @@ class TelemetryBridge:
         self.right_stick_y_history: deque = deque(maxlen=history_len)
         self.throttle_history: deque = deque(maxlen=history_len)
         self.brake_history: deque = deque(maxlen=history_len)
+        self.raw_angle_history: deque = deque(maxlen=history_len)
+        self.kalman_angle_history: deque = deque(maxlen=history_len)
+
+        # Real-time DSP & Protocol Metadata
+        self.active_protocol: str = "BINARY v2 (24B)"
+        self.active_filter_mode: str = "KALMAN"
+        self.large_motor_rumble: int = 0
+        self.small_motor_rumble: int = 0
+        self.latest_raw_angle: float = 0.0
+        self.latest_filtered_angle: float = 0.0
 
         # Logging stream queue
         self.log_queue: queue.Queue = queue.Queue(maxsize=1000)
@@ -205,17 +217,34 @@ class TelemetryBridge:
                 slot.buttons = {}
                 self._last_packet_times[slot_index].clear()
 
+    def record_rumble(self, slot_index: int, large_motor: int, small_motor: int) -> None:
+        """Records active XInput force-feedback rumble levels for GUI meters."""
+        self.large_motor_rumble = int(large_motor)
+        self.small_motor_rumble = int(small_motor)
+
     def record_input(
         self,
         slot_index: int,
         client_id: str,
         control_state: Dict[str, Any],
         client_rtt: float = 0.0,
-        inter_arrival_ms: float = 16.6
+        inter_arrival_ms: float = 16.6,
+        protocol: str = "BINARY v2",
+        raw_angle: float = 0.0,
+        filtered_angle: float = 0.0,
+        filter_mode: str = "KALMAN"
     ) -> None:
         """High-frequency input frame ingestion from gateway WebSocket."""
         now = time.perf_counter()
         self.total_gateway_packets += 1
+
+        # Real-time protocol and filter telemetry
+        self.active_protocol = protocol
+        self.active_filter_mode = filter_mode
+        self.latest_raw_angle = raw_angle
+        self.latest_filtered_angle = filtered_angle
+        self.raw_angle_history.append((now, raw_angle))
+        self.kalman_angle_history.append((now, filtered_angle))
 
         # Global Hz computation
         self._global_packet_times.append(now)
@@ -230,6 +259,8 @@ class TelemetryBridge:
             slot.last_seen = now
             slot.total_packets += 1
             slot.rtt_ms = client_rtt
+            slot.protocol = protocol
+            slot.filter_mode = filter_mode
             slot.stick_x = control_state.get("stick_x", 0)
             slot.stick_y = control_state.get("stick_y", 0)
             slot.right_stick_x = control_state.get("right_stick_x", 0)
@@ -292,6 +323,8 @@ class TelemetryBridge:
         self.throttle_history.append((now, prim.throttle if prim.connected else 0))
         self.brake_history.append((now, prim.brake if prim.connected else 0))
         self.rate_history.append((now, self.effective_hz if prim.connected else 0.0))
+        self.raw_angle_history.append((now, self.latest_raw_angle if prim.connected else 0.0))
+        self.kalman_angle_history.append((now, self.latest_filtered_angle if prim.connected else 0.0))
 
     def get_snapshot(self) -> Dict[str, Any]:
         """Provides an atomic, non-blocking state snapshot with live sampled tick for all 4 players."""
@@ -309,6 +342,12 @@ class TelemetryBridge:
             "avg_rtt_ms": self.avg_rtt_ms,
             "min_rtt_ms": self.min_rtt_ms,
             "max_rtt_ms": self.max_rtt_ms,
+            "active_protocol": self.active_protocol,
+            "active_filter_mode": self.active_filter_mode,
+            "large_motor_rumble": self.large_motor_rumble,
+            "small_motor_rumble": self.small_motor_rumble,
+            "latest_raw_angle": self.latest_raw_angle,
+            "latest_filtered_angle": self.latest_filtered_angle,
             "slots": [
                 {
                     "slot_index": s.slot_index,
@@ -316,6 +355,8 @@ class TelemetryBridge:
                     "client_id": s.client_id,
                     "client_ip": s.client_ip,
                     "player_color": s.player_color,
+                    "protocol": s.protocol,
+                    "filter_mode": s.filter_mode,
                     "rtt_ms": s.rtt_ms,
                     "hz": s.packet_rate_hz,
                     "packets": s.total_packets,
@@ -332,7 +373,10 @@ class TelemetryBridge:
                     "right_stick_x_wave": list(s.right_stick_x_history),
                     "right_stick_y_wave": list(s.right_stick_y_history),
                     "throttle_wave": list(s.throttle_history),
-                    "brake_wave": list(s.brake_history)
+                    "brake_wave": list(s.brake_history),
+                    "raw_angle_wave": list(self.raw_angle_history),
+                    "kalman_angle_wave": list(self.kalman_angle_history),
+                    "filtered_angle": self.latest_filtered_angle
                 }
                 for s in self.slots
             ],
@@ -343,5 +387,7 @@ class TelemetryBridge:
             "right_stick_y_wave": list(self.right_stick_y_history),
             "throttle_wave": list(self.throttle_history),
             "brake_wave": list(self.brake_history),
-            "rate_wave": list(self.rate_history)
+            "rate_wave": list(self.rate_history),
+            "raw_angle_wave": list(self.raw_angle_history),
+            "kalman_angle_wave": list(self.kalman_angle_history)
         }

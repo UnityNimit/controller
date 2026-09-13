@@ -58,13 +58,18 @@ class HapticAudioEngine {
 
   handleRumble(largeMotor = 0, smallMotor = 0) {
     if (!this.canVibrate) return;
-    const intensity = Math.max(largeMotor, smallMotor);
-    if (intensity > 0.05) {
-      const ms = Math.min(120, Math.round(intensity * 75));
-      try {
-        navigator.vibrate([ms]);
-      } catch (_) {}
-    }
+    const large = Math.max(0, Math.min(255, Number(largeMotor) || 0));
+    const small = Math.max(0, Math.min(255, Number(smallMotor) || 0));
+    if (large === 0 && small === 0) return;
+
+    const durationMs = Math.min(160, Math.max(16, Math.round((large / 255) * 120 + (small / 255) * 50)));
+    try {
+      if (large > 120 && small > 80) {
+        navigator.vibrate([durationMs, 18, Math.round(durationMs * 0.7)]);
+      } else {
+        navigator.vibrate([durationMs]);
+      }
+    } catch (_) {}
   }
 }
 
@@ -216,6 +221,11 @@ class GamepadClient {
     this.playerSlot = 1;
     this.isRotated = false;
     this.seq = 0;
+
+    // Zero-Copy 24-Byte Binary Wire Protocol (v2) Engine
+    this.useBinaryProtocol = true;
+    this._binBuffer = new ArrayBuffer(24);
+    this._binView = new DataView(this._binBuffer);
 
     let storedClientId = localStorage.getItem("controller_client_id");
     if (!storedClientId) {
@@ -775,6 +785,7 @@ class GamepadClient {
     const url = `${proto}//${location.host}/ws`;
 
     this.ws = new WebSocket(url);
+    this.ws.binaryType = "arraybuffer";
 
     this.ws.onopen = () => {
       this.connected = true;
@@ -782,7 +793,15 @@ class GamepadClient {
 
     this.ws.onmessage = async (evt) => {
       try {
-        const msg = JSON.parse(evt.data);
+        let msg = null;
+        if (typeof evt.data === "string") {
+          msg = JSON.parse(evt.data);
+        } else if (evt.data instanceof ArrayBuffer) {
+          const dec = new TextDecoder();
+          msg = JSON.parse(dec.decode(evt.data));
+        }
+        if (!msg) return;
+
         if (msg.type === "AUTH_CHALLENGE") {
           const prefSlot = 1;
           const authResponse = this.security.solveChallenge(msg.nonce, msg.timestamp, this.clientId, prefSlot);
@@ -823,6 +842,59 @@ class GamepadClient {
     const effectiveGyro = this.gyroEnabled && !manualStickActive;
     const effectiveAngle = effectiveGyro ? (this.rawAngle - this.zeroOffset) : 0.0;
     const effectiveStickX = effectiveGyro ? 0 : this.stickX;
+
+    if (this.useBinaryProtocol) {
+      const v = this._binView;
+      // 0: Magic 0x43 ('C'), 1: Version 0x02
+      v.setUint8(0, 0x43);
+      v.setUint8(1, 0x02);
+      // 2-3: seq uint16
+      v.setUint16(2, this.seq & 0xffff, true);
+      // 4-7: timestamp uint32 ms
+      v.setUint32(4, Math.round(now) >>> 0, true);
+      // 8-15: axes (stickX, stickY, rightStickX, rightStickY)
+      v.setInt16(8, Math.max(-32768, Math.min(32767, Math.round(effectiveStickX))), true);
+      v.setInt16(10, Math.max(-32768, Math.min(32767, Math.round(this.stickY))), true);
+      v.setInt16(12, Math.max(-32768, Math.min(32767, Math.round(this.rightStickX))), true);
+      v.setInt16(14, Math.max(-32768, Math.min(32767, Math.round(this.rightStickY))), true);
+      // 16-17: throttle, brake uint8
+      v.setUint8(16, Math.max(0, Math.min(255, Math.round(this.throttle * 255))));
+      v.setUint8(17, Math.max(0, Math.min(255, Math.round(this.brake * 255))));
+      // 18-19: button bitmask uint16
+      let btnMask = 0;
+      if (this.buttons.A) btnMask |= (1 << 0);
+      if (this.buttons.B) btnMask |= (1 << 1);
+      if (this.buttons.X) btnMask |= (1 << 2);
+      if (this.buttons.Y) btnMask |= (1 << 3);
+      if (this.buttons.LB) btnMask |= (1 << 4);
+      if (this.buttons.RB) btnMask |= (1 << 5);
+      if (this.brake > 0.05) btnMask |= (1 << 6);
+      if (this.throttle > 0.05) btnMask |= (1 << 7);
+      if (this.buttons.START) btnMask |= (1 << 8);
+      if (this.buttons.BACK) btnMask |= (1 << 9);
+      if (this.buttons.LS) btnMask |= (1 << 10);
+      if (this.buttons.RS) btnMask |= (1 << 11);
+      if (this.buttons.DPAD_UP) btnMask |= (1 << 12);
+      if (this.buttons.DPAD_DOWN) btnMask |= (1 << 13);
+      if (this.buttons.DPAD_LEFT) btnMask |= (1 << 14);
+      if (this.buttons.DPAD_RIGHT) btnMask |= (1 << 15);
+      v.setUint16(18, btnMask, true);
+      // 20-21: gyro angle x 100 int16
+      const angleX100 = Math.max(-32768, Math.min(32767, Math.round(effectiveAngle * 100)));
+      v.setInt16(20, angleX100, true);
+      // 22: flags (bit 0: gyro_enabled, bit 2: layout2)
+      let flags = 0;
+      if (effectiveGyro) flags |= 0x01;
+      if (this.currentLayout === 2) flags |= 0x04;
+      v.setUint8(22, flags);
+      // 23: rtt ms uint8
+      v.setUint8(23, Math.min(255, Math.round(this.rtt || 0)));
+
+      try {
+        this.ws.send(this._binBuffer);
+      } catch (_) {}
+      return;
+    }
 
     const packet = {
       type: "INPUT",
@@ -913,12 +985,14 @@ class GamepadClient {
     return null;
   }
 
-  _setButtonState(key, isPressed) {
+  _setButtonState(key, isPressed, pressure = 1.0) {
     if (this.isCustomizingLayout1) return;
     if (key === "LT") {
-      this.brake = isPressed ? 1.0 : 0.0;
+      const p = (pressure !== undefined && pressure > 0.05) ? pressure : 1.0;
+      this.brake = isPressed ? Math.max(0.1, Math.min(1.0, p)) : 0.0;
     } else if (key === "RT") {
-      this.throttle = isPressed ? 1.0 : 0.0;
+      const p = (pressure !== undefined && pressure > 0.05) ? pressure : 1.0;
+      this.throttle = isPressed ? Math.max(0.1, Math.min(1.0, p)) : 0.0;
     } else if (key in this.buttons) {
       this.buttons[key] = isPressed;
     }
@@ -1033,8 +1107,9 @@ class GamepadClient {
         e.preventDefault();
         const key = targetBtn.dataset.btn || targetBtn.dataset.dir || targetBtn.dataset.trigger;
         if (key) {
+          const pressure = (e.pressure && e.pressure > 0.05) ? e.pressure : (e.force && e.force > 0.05 ? e.force : 1.0);
           this.directBtnPointers.set(e.pointerId, key);
-          this._setButtonState(key, true);
+          this._setButtonState(key, true, pressure);
           this.haptics.triggerClick(key.startsWith("DPAD") ? "dpad" : (key === "LT" || key === "RT" ? "heavy" : "normal"));
           this.sendInputNow(true);
         }
@@ -1054,10 +1129,11 @@ class GamepadClient {
         return;
       }
 
-      // Drag / Glide over keys
+      // Drag / Glide over keys & 3D Touch pressure modulation
       const targetBtn = this._getButtonAtPoint(e.clientX, e.clientY);
       const newKey = targetBtn ? (targetBtn.dataset.btn || targetBtn.dataset.dir || targetBtn.dataset.trigger) : null;
       const currentKey = this.directBtnPointers.get(e.pointerId) || null;
+      const pressure = (e.pressure && e.pressure > 0.05) ? e.pressure : (e.force && e.force > 0.05 ? e.force : 1.0);
 
       if (currentKey !== newKey) {
         if (currentKey !== null) {
@@ -1071,11 +1147,14 @@ class GamepadClient {
           this.directBtnPointers.set(e.pointerId, newKey);
           const isSoleHolder = Array.from(this.directBtnPointers.values()).filter(k => k === newKey).length === 1;
           if (isSoleHolder) {
-            this._setButtonState(newKey, true);
+            this._setButtonState(newKey, true, pressure);
             this.haptics.triggerClick(newKey.startsWith("DPAD") ? "dpad" : (newKey === "LT" || newKey === "RT" ? "heavy" : "normal"));
           }
         }
         this.sendInputNow(true);
+      } else if (currentKey === "LT" || currentKey === "RT") {
+        this._setButtonState(currentKey, true, pressure);
+        this.sendInputNow();
       }
     };
 
