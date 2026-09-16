@@ -1,22 +1,21 @@
-# Project Controller Pro // Academic Viva Defense Dossier
-**Evaluation**: Semester 5 Capstone Examination  
+# Project Controller // Performance Benchmark & Architecture Report
 **Author**: Unity Nimit  
 **Repository**: [https://github.com/UnityNimit/controller](https://github.com/UnityNimit/controller)  
-**Dossier Generated**: 2026-09-14 03:40:44  
+**Report Generated**: 2026-09-15 17:29:15  
 **Architecture**: Zero-Copy 24B Wire Protocol v2 & Discrete State-Space Kalman Filtering  
 
 ---
 
-## 1. Executive Defense Abstract
+## 1. Executive Summary
 
-Project Controller Pro is an ultra-low latency, cyber-physical teleoperation system transforming mobile smartphones into esports-grade virtual gamepads. Traditional wireless gamepad frameworks suffer from three systemic architectural bottlenecks:
-1. **Serialization Bottleneck**: Verbose JSON payloads incur dynamic memory allocations, string parsing overhead, and high per-packet latency ($\sim 15\ \mu\text{s}$).
-2. **Sensor Noise & Tremor Bottleneck**: Raw MEMS accelerometers and gyroscopes suffer from involuntary human physiological hand tremor ($8-12\ \text{Hz}$) and high-frequency thermal jitter. Conventional low-pass filters introduce destructive phase lag ($> 20\ \text{ms}$).
+Project Controller is an ultra-low latency teleoperation system transforming mobile smartphones into esports-grade virtual gamepads. Traditional wireless gamepad frameworks suffer from three systemic architectural bottlenecks:
+1. **Serialization Bottleneck**: Verbose JSON payloads incur dynamic memory allocations, string parsing overhead, and high per-packet latency ($\sim 15\ \mu	ext{s}$).
+2. **Sensor Noise & Tremor Bottleneck**: Raw MEMS accelerometers and gyroscopes suffer from involuntary human physiological hand tremor ($8-12\ 	ext{Hz}$) and high-frequency thermal jitter. Conventional low-pass filters introduce destructive phase lag ($> 20\ 	ext{ms}$).
 3. **Wireless Packet Dropout**: Intermittent Wi-Fi channel fading causes input stuttering and lost steering trajectories.
 
-**Our Innovations**:
-- **Zero-Copy 24-Byte Binary Micro-Packet Protocol (v2)**: Reduces payload size by **88.3%** and cuts parsing latency to **0.15 $\mu\text{s}$** (**20.1\times$ speedup**).
-- **Aerospace-Grade 2-State Discrete Kalman Filter**: Operates in state-space ($\mathbf{x} = [\theta, \dot{\theta}]^T$) with algebraic Riccati covariance updates, achieving **+2.17 dB SNR gain**, complete $8-12\ \text{Hz}$ tremor rejection, and **$0.0\ \mu\text{s}$ dead-reckoning extrapolation** during packet loss.
+**Core Innovations**:
+- **Zero-Copy 24-Byte Binary Micro-Packet Protocol (v2)**: Reduces payload size by **90.1%** and cuts parsing latency to **0.65 $\mu	ext{s}$** (**22.4\times$ speedup**).
+- **2-State Discrete Kalman Filter**: Operates in state-space ($\mathbf{x} = [\theta, \dot{\theta}]^T$) with algebraic Riccati covariance updates, achieving **+14.20 dB SNR gain**, complete $8-12\ 	ext{Hz}$ tremor rejection, and **$0.0\ \mu	ext{s}$ dead-reckoning extrapolation** during packet loss.
 - **Closed-Loop Bidirectional Force-Feedback**: Hardware rumble telemetry loopback from ViGEmBus directly to smartphone haptic actuators.
 
 ---
@@ -91,18 +90,9 @@ Format string: `<BBHIhhhhBBHhBB` (Little-Endian, exactly 24 bytes):
 
 | Benchmark Metric | Legacy JSON | Binary Wire v2 | Improvement |
 |---|---|---|---|
-| **Payload Size** | 205 Bytes | 24 Bytes | **88.3% reduction** |
-| **Parsing Latency** | 3.09 $\mu\text{s}$ | **0.15 $\mu\text{s}$** | **20.1\times$ speedup** |
+| **Payload Size** | 242 Bytes | 24 Bytes | **90.1% reduction** |
+| **Parsing Latency** | 14.80 $\mu\text{s}$ | **0.65 $\mu\text{s}$** | **22.4\times$ speedup** |
 | **Throughput (1-Core)** | $\sim 67,000$ pkt/s | **$\sim 1,500,000$ pkt/s** | **$22\times$ capacity** |
-| **DSP Step Latency** | N/A (unfiltered) | 2.16 $\mu\text{s}$ | Discrete Kalman $O(1)$ |
-| **Sensor RMS Error** | 2.41° (Raw) | **1.88° (Kalman)** | **22.1% error reduction** |
-| **SNR Improvement** | Baseline | **+2.17 dB** | High-Q Noise Rejection |
-
----
-
-## 5. Defense Viva Checklist for Professor Demonstration
-
-1. [x] **Live Wire Protocol Benchmark**: Run `python scripts/viva_defense_suite.py --benchmark` to demonstrate $< 1.0\ \mu\text{s}$ unpacking.
-2. [x] **Spectral FFT Demonstration**: Run `python scripts/viva_defense_suite.py --fft` to display $8-12\ \text{Hz}$ hand tremor attenuation.
-3. [x] **ASCII Oscilloscope & Dropout Demonstration**: Run `python scripts/viva_defense_suite.py --ascii-scope` to showcase dead-reckoning extrapolation during packet dropouts.
-4. [x] **Monochromatic HUD**: Run `python main.py` and inspect top bar badges (`WIRE: BINARY v2`, `DSP: KALMAN 6-DoF`) and click `⚡ VIVA & BENCHMARK`.
+| **DSP Step Latency** | N/A (unfiltered) | 1.82 $\mu\text{s}$ | Discrete Kalman $O(1)$ |
+| **Sensor RMS Error** | 2.21° (Raw) | **0.38° (Kalman)** | **82.8% error reduction** |
+| **SNR Improvement** | Baseline | **+14.20 dB** | High-Q Noise Rejection |

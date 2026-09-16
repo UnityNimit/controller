@@ -468,11 +468,12 @@ class ControllerGatewayServer:
                         handbrake=buttons.get("HANDBRAKE", False)
                     )
 
-                    if self.bridge is not None and player_slot is not None:
+                    curr_slot = self.input_manager.get_slot(client_id)
+                    if self.bridge is not None and curr_slot is not None:
                         client_rtt = float(data.get("rtt", 0.0))
                         dt_ms = qos_rec.get("inter_arrival_ms", 16.6)
                         self.bridge.record_input(
-                            slot_index=player_slot,
+                            slot_index=curr_slot,
                             client_id=client_id,
                             control_state=control_state,
                             client_rtt=client_rtt,
@@ -487,7 +488,9 @@ class ControllerGatewayServer:
                     angle = float(data.get("angle", 0.0))
                     if client_id in self.pipelines:
                         self.pipelines[client_id].calibrate_zero(angle)
-                        logger.info(f"Calibrated zero steering offset for Player {player_slot + 1} at {angle:.2f}°")
+                        curr_slot = self.input_manager.get_slot(client_id)
+                        slot_str = str(curr_slot + 1) if curr_slot is not None else "?"
+                        logger.info(f"Calibrated zero steering offset for Player {slot_str} at {angle:.2f}°")
 
                 elif msg_type == "PING":
                     await websocket.send(json.dumps({"type": "PONG", "ts": data.get("ts", time.time())}))
@@ -519,27 +522,41 @@ class ControllerGatewayServer:
 
     def _on_rumble_event(self, slot_idx: int, large_motor: int, small_motor: int) -> None:
         """Invoked by OS virtual gamepad when game engine sends XInput force-feedback."""
+        # Standardize motor speed to standard 0..255 byte range
+        lm = max(0, min(255, int(large_motor) if large_motor <= 255 else int(large_motor // 256)))
+        sm = max(0, min(255, int(small_motor) if small_motor <= 255 else int(small_motor // 256)))
+
         if self.bridge is not None:
             try:
-                self.bridge.record_rumble(slot_idx, large_motor, small_motor)
-            except Exception:
-                pass
+                self.bridge.record_rumble(slot_idx, lm, sm)
+            except Exception as e:
+                logger.debug(f"Bridge record_rumble error: {e}")
 
         if not self._running or getattr(self, "loop", None) is None:
             return
+
         if 0 <= slot_idx < len(self.input_manager.slots):
             cid = self.input_manager.slots[slot_idx]
             if cid and cid in self.client_sockets:
                 ws = self.client_sockets[cid]
                 msg = json.dumps({
                     "type": "RUMBLE",
-                    "large": large_motor,
-                    "small": small_motor
+                    "large": lm,
+                    "small": sm
                 })
                 try:
                     asyncio.run_coroutine_threadsafe(self._send_safe(ws, msg), self.loop)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Rumble websocket dispatch error: {e}")
+
+    def trigger_test_rumble(self, slot_idx: int = 0, large: int = 255, small: int = 255, duration_sec: float = 0.4) -> None:
+        """Sends a high-intensity force-feedback rumble pulse to the specified slot for hardware verification."""
+        import threading
+        def _test_pulse():
+            self._on_rumble_event(slot_idx, large, small)
+            time.sleep(duration_sec)
+            self._on_rumble_event(slot_idx, 0, 0)
+        threading.Thread(target=_test_pulse, daemon=True, name=f"TestRumble-P{slot_idx+1}").start()
 
     def swap_player_slots(self, slot_a: int, slot_b: int) -> bool:
         """Swaps controller assignments between slot_a and slot_b and notifies clients."""
@@ -700,6 +717,7 @@ class ControllerGatewayServer:
             self.bridge.driver_status = driver_desc
             self.bridge.pulse_test_callback = self.input_manager.pulse_test_button
             self.bridge.reinit_driver_callback = self.input_manager.reinit_controllers
+            self.bridge.trigger_test_rumble_callback = self.trigger_test_rumble
 
     async def stop(self) -> None:
         """Gracefully shuts down all subsystems and hardware emulations."""

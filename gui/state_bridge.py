@@ -20,6 +20,7 @@ class ControllerSlotState:
     client_ip: str = ""
     player_color: str = "#00f5ff"
     last_seen: float = 0.0
+    last_packet_recorded: float = 0.0
     rtt_ms: float = 0.0
     jitter_ms: float = 0.0
     packet_rate_hz: float = 0.0
@@ -34,13 +35,19 @@ class ControllerSlotState:
     # Dedicated per-slot time-series ring buffers
     protocol: str = "BINARY v2"
     filter_mode: str = "KALMAN"
-    latency_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    stick_x_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    stick_y_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    right_stick_x_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    right_stick_y_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    throttle_history: deque = field(default_factory=lambda: deque(maxlen=80))
-    brake_history: deque = field(default_factory=lambda: deque(maxlen=80))
+    latency_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    stick_x_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    stick_y_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    right_stick_x_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    right_stick_y_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    throttle_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    brake_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    raw_angle_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    kalman_angle_history: deque = field(default_factory=lambda: deque(maxlen=120))
+    latest_raw_angle: float = 0.0
+    latest_filtered_angle: float = 0.0
+    large_motor_rumble: int = 0
+    small_motor_rumble: int = 0
 
 
 class QueueLogHandler(logging.Handler):
@@ -120,12 +127,14 @@ class TelemetryBridge:
 
         # External callbacks
         self.pulse_test_callback: Optional[Any] = None
+        self.trigger_test_rumble_callback: Optional[Any] = None
         self.reinit_driver_callback: Optional[Any] = None
         self.swap_slots_callback: Optional[Any] = None
 
         # Internal tracking for rate estimation
         self._last_packet_times: Dict[int, deque] = {i: deque(maxlen=30) for i in range(4)}
         self._global_packet_times: deque = deque(maxlen=60)
+        self._last_sample_tick_time: float = 0.0
 
         # Global aggregate metrics
         self.avg_rtt_ms: float = 0.0
@@ -134,12 +143,18 @@ class TelemetryBridge:
         self.effective_hz: float = 0.0
 
     def pulse_test(self, slot_index: int) -> None:
-        """Triggers a momentary button pulse on slot_index to wake up online controller testers."""
+        """Triggers a momentary button pulse and test rumble on slot_index to wake up testers and vibrate phone."""
         if self.pulse_test_callback is not None:
             try:
                 self.pulse_test_callback(slot_index)
             except Exception as e:
                 logging.getLogger("Controller.Bridge").debug(f"Pulse test error: {e}")
+
+        if self.trigger_test_rumble_callback is not None:
+            try:
+                self.trigger_test_rumble_callback(slot_index, 255, 255, 0.4)
+            except Exception as e:
+                logging.getLogger("Controller.Bridge").debug(f"Test rumble error: {e}")
 
     def swap_slots(self, slot_a: int, slot_b: int) -> bool:
         """Atomically swaps two player slots in GUI and notifies gateway server."""
@@ -152,22 +167,20 @@ class TelemetryBridge:
             except Exception as e:
                 logging.getLogger("Controller.Bridge").error(f"Error in swap_slots_callback: {e}")
 
-        s_a = self.slots[slot_a]
-        s_b = self.slots[slot_b]
+        # Swap the entire slot state objects
+        self.slots[slot_a], self.slots[slot_b] = self.slots[slot_b], self.slots[slot_a]
+        self.slots[slot_a].slot_index = slot_a
+        self.slots[slot_b].slot_index = slot_b
 
-        s_a.connected, s_b.connected = s_b.connected, s_a.connected
-        s_a.client_id, s_b.client_id = s_b.client_id, s_a.client_id
-        s_a.client_ip, s_b.client_ip = s_b.client_ip, s_a.client_ip
-        s_a.rtt_ms, s_b.rtt_ms = s_b.rtt_ms, s_a.rtt_ms
-        s_a.packet_rate_hz, s_b.packet_rate_hz = s_b.packet_rate_hz, s_a.packet_rate_hz
-        s_a.total_packets, s_b.total_packets = s_b.total_packets, s_a.total_packets
-        s_a.stick_x, s_b.stick_x = 0, 0
-        s_a.stick_y, s_b.stick_y = 0, 0
-        s_a.right_stick_x, s_b.right_stick_x = 0, 0
-        s_a.right_stick_y, s_b.right_stick_y = 0, 0
-        s_a.throttle, s_b.throttle = 0, 0
-        s_a.brake, s_b.brake = 0, 0
-        s_a.buttons, s_b.buttons = {}, {}
+        player_colors = ["#00f5ff", "#00f59b", "#ffb830", "#ff2a8d"]
+        self.slots[slot_a].player_color = player_colors[slot_a % 4]
+        self.slots[slot_b].player_color = player_colors[slot_b % 4]
+
+        # Swap rate tracking queues
+        self._last_packet_times[slot_a], self._last_packet_times[slot_b] = (
+            self._last_packet_times[slot_b],
+            self._last_packet_times[slot_a]
+        )
         return True
 
     def reinit_driver(self) -> bool:
@@ -189,7 +202,7 @@ class TelemetryBridge:
             slot.connected = True
             slot.client_id = client_id
             slot.client_ip = client_ip
-            slot.last_seen = time.time()
+            slot.last_seen = time.perf_counter()
             slot.total_packets = 0
             slot.stick_x = 0
             slot.stick_y = 0
@@ -198,6 +211,12 @@ class TelemetryBridge:
             slot.throttle = 0
             slot.brake = 0
             slot.buttons = {}
+            slot.large_motor_rumble = 0
+            slot.small_motor_rumble = 0
+            slot.latest_raw_angle = 0.0
+            slot.latest_filtered_angle = 0.0
+            slot.raw_angle_history.clear()
+            slot.kalman_angle_history.clear()
             self._last_packet_times[slot_index].clear()
 
     def unregister_client(self, slot_index: int, client_id: str) -> None:
@@ -215,12 +234,23 @@ class TelemetryBridge:
                 slot.throttle = 0
                 slot.brake = 0
                 slot.buttons = {}
+                slot.large_motor_rumble = 0
+                slot.small_motor_rumble = 0
+                slot.latest_raw_angle = 0.0
+                slot.latest_filtered_angle = 0.0
+                slot.raw_angle_history.clear()
+                slot.kalman_angle_history.clear()
                 self._last_packet_times[slot_index].clear()
 
     def record_rumble(self, slot_index: int, large_motor: int, small_motor: int) -> None:
         """Records active XInput force-feedback rumble levels for GUI meters."""
-        self.large_motor_rumble = int(large_motor)
-        self.small_motor_rumble = int(small_motor)
+        lm = int(large_motor)
+        sm = int(small_motor)
+        if 0 <= slot_index < 4:
+            self.slots[slot_index].large_motor_rumble = lm
+            self.slots[slot_index].small_motor_rumble = sm
+        self.large_motor_rumble = lm
+        self.small_motor_rumble = sm
 
     def record_input(
         self,
@@ -241,10 +271,11 @@ class TelemetryBridge:
         # Real-time protocol and filter telemetry
         self.active_protocol = protocol
         self.active_filter_mode = filter_mode
-        self.latest_raw_angle = raw_angle
-        self.latest_filtered_angle = filtered_angle
-        self.raw_angle_history.append((now, raw_angle))
-        self.kalman_angle_history.append((now, filtered_angle))
+
+        if raw_angle == 0.0 and "steering_angle" in control_state:
+            raw_angle = float(control_state["steering_angle"])
+        if filtered_angle == 0.0 and "filtered_angle" in control_state:
+            filtered_angle = float(control_state["filtered_angle"])
 
         # Global Hz computation
         self._global_packet_times.append(now)
@@ -261,13 +292,27 @@ class TelemetryBridge:
             slot.rtt_ms = client_rtt
             slot.protocol = protocol
             slot.filter_mode = filter_mode
-            slot.stick_x = control_state.get("stick_x", 0)
-            slot.stick_y = control_state.get("stick_y", 0)
-            slot.right_stick_x = control_state.get("right_stick_x", 0)
-            slot.right_stick_y = control_state.get("right_stick_y", 0)
-            slot.throttle = control_state.get("throttle", 0)
-            slot.brake = control_state.get("brake", 0)
+            slot.stick_x = int(control_state.get("stick_x", 0))
+            slot.stick_y = int(control_state.get("stick_y", 0))
+            slot.right_stick_x = int(control_state.get("right_stick_x", 0))
+            slot.right_stick_y = int(control_state.get("right_stick_y", 0))
+            slot.throttle = int(control_state.get("throttle", 0))
+            slot.brake = int(control_state.get("brake", 0))
             slot.buttons = dict(control_state.get("buttons", {}))
+            slot.latest_raw_angle = raw_angle
+            slot.latest_filtered_angle = filtered_angle
+
+            # Direct high-frequency packet telemetry history (captures every flick & micro-movement)
+            slot.stick_x_history.append((now, slot.stick_x))
+            slot.stick_y_history.append((now, slot.stick_y))
+            slot.right_stick_x_history.append((now, slot.right_stick_x))
+            slot.right_stick_y_history.append((now, slot.right_stick_y))
+            slot.throttle_history.append((now, slot.throttle))
+            slot.brake_history.append((now, slot.brake))
+            slot.raw_angle_history.append((now, raw_angle))
+            slot.kalman_angle_history.append((now, filtered_angle))
+            if client_rtt > 0:
+                slot.latency_history.append((now, client_rtt))
 
             # Per-slot rate
             dq = self._last_packet_times[slot_index]
@@ -279,12 +324,24 @@ class TelemetryBridge:
 
             # Update live stats for primary slot
             primary_slot = self._get_primary_active_slot()
-            if slot_index == primary_slot and client_rtt > 0:
-                if self.min_rtt_ms == 0.0 or client_rtt < self.min_rtt_ms:
-                    self.min_rtt_ms = client_rtt
-                if client_rtt > self.max_rtt_ms:
-                    self.max_rtt_ms = client_rtt
-                self.avg_rtt_ms = round((self.avg_rtt_ms * 0.9) + (client_rtt * 0.1), 1)
+            if slot_index == primary_slot:
+                self.latest_raw_angle = raw_angle
+                self.latest_filtered_angle = filtered_angle
+                self.raw_angle_history.append((now, raw_angle))
+                self.kalman_angle_history.append((now, filtered_angle))
+                self.stick_x_history.append((now, slot.stick_x))
+                self.stick_y_history.append((now, slot.stick_y))
+                self.right_stick_x_history.append((now, slot.right_stick_x))
+                self.right_stick_y_history.append((now, slot.right_stick_y))
+                self.throttle_history.append((now, slot.throttle))
+                self.brake_history.append((now, slot.brake))
+                if client_rtt > 0:
+                    self.latency_history.append((now, client_rtt))
+                    if self.min_rtt_ms == 0.0 or client_rtt < self.min_rtt_ms:
+                        self.min_rtt_ms = client_rtt
+                    if client_rtt > self.max_rtt_ms:
+                        self.max_rtt_ms = client_rtt
+                    self.avg_rtt_ms = round((self.avg_rtt_ms * 0.9) + (client_rtt * 0.1), 1)
 
     def _get_primary_active_slot(self) -> int:
         for idx, s in enumerate(self.slots):
@@ -293,41 +350,50 @@ class TelemetryBridge:
         return 0
 
     def sample_tick(self) -> None:
-        """Called on every GUI render frame to roll continuous waveforms for ALL 4 player slots."""
+        """Called on GUI render frames to roll continuous waveforms at high fidelity."""
         now = time.perf_counter()
-        for s in self.slots:
-            curr_rtt = s.rtt_ms if s.connected else 0.0
-            curr_x = s.stick_x if s.connected else 0
-            curr_y = s.stick_y if s.connected else 0
-            curr_rx = s.right_stick_x if s.connected else 0
-            curr_ry = s.right_stick_y if s.connected else 0
-            curr_th = s.throttle if s.connected else 0
-            curr_br = s.brake if s.connected else 0
+        self._last_sample_tick_time = now
 
-            s.latency_history.append((now, curr_rtt))
-            s.stick_x_history.append((now, curr_x))
-            s.stick_y_history.append((now, curr_y))
-            s.right_stick_x_history.append((now, curr_rx))
-            s.right_stick_y_history.append((now, curr_ry))
-            s.throttle_history.append((now, curr_th))
-            s.brake_history.append((now, curr_br))
+        for s in self.slots:
+            # If disconnected, history empty, or no live packet arrived in >12ms, roll baseline
+            if not s.connected or len(s.stick_x_history) == 0 or (now - s.last_seen) > 0.012:
+                curr_rtt = s.rtt_ms if s.connected else 0.0
+                curr_x = s.stick_x if s.connected else 0
+                curr_y = s.stick_y if s.connected else 0
+                curr_rx = s.right_stick_x if s.connected else 0
+                curr_ry = s.right_stick_y if s.connected else 0
+                curr_th = s.throttle if s.connected else 0
+                curr_br = s.brake if s.connected else 0
+                curr_raw_angle = s.latest_raw_angle if s.connected else 0.0
+                curr_kalman_angle = s.latest_filtered_angle if s.connected else 0.0
+
+                s.latency_history.append((now, curr_rtt))
+                s.stick_x_history.append((now, curr_x))
+                s.stick_y_history.append((now, curr_y))
+                s.right_stick_x_history.append((now, curr_rx))
+                s.right_stick_y_history.append((now, curr_ry))
+                s.throttle_history.append((now, curr_th))
+                s.brake_history.append((now, curr_br))
+                s.raw_angle_history.append((now, curr_raw_angle))
+                s.kalman_angle_history.append((now, curr_kalman_angle))
 
         # Global aggregate history
         primary_slot = self._get_primary_active_slot()
         prim = self.slots[primary_slot]
-        self.latency_history.append((now, prim.rtt_ms if prim.connected else 0.0))
-        self.stick_x_history.append((now, prim.stick_x if prim.connected else 0))
-        self.stick_y_history.append((now, prim.stick_y if prim.connected else 0))
-        self.right_stick_x_history.append((now, prim.right_stick_x if prim.connected else 0))
-        self.right_stick_y_history.append((now, prim.right_stick_y if prim.connected else 0))
-        self.throttle_history.append((now, prim.throttle if prim.connected else 0))
-        self.brake_history.append((now, prim.brake if prim.connected else 0))
+        if not prim.connected or len(self.stick_x_history) == 0 or (now - prim.last_seen) > 0.012:
+            self.latency_history.append((now, prim.rtt_ms if prim.connected else 0.0))
+            self.stick_x_history.append((now, prim.stick_x if prim.connected else 0))
+            self.stick_y_history.append((now, prim.stick_y if prim.connected else 0))
+            self.right_stick_x_history.append((now, prim.right_stick_x if prim.connected else 0))
+            self.right_stick_y_history.append((now, prim.right_stick_y if prim.connected else 0))
+            self.throttle_history.append((now, prim.throttle if prim.connected else 0))
+            self.brake_history.append((now, prim.brake if prim.connected else 0))
+            self.raw_angle_history.append((now, self.latest_raw_angle if prim.connected else 0.0))
+            self.kalman_angle_history.append((now, self.latest_filtered_angle if prim.connected else 0.0))
         self.rate_history.append((now, self.effective_hz if prim.connected else 0.0))
-        self.raw_angle_history.append((now, self.latest_raw_angle if prim.connected else 0.0))
-        self.kalman_angle_history.append((now, self.latest_filtered_angle if prim.connected else 0.0))
 
     def get_snapshot(self) -> Dict[str, Any]:
-        """Provides an atomic, non-blocking state snapshot with live sampled tick for all 4 players."""
+        """Provides an atomic, non-blocking zero-allocation state snapshot for ultra-smooth rendering."""
         self.sample_tick()
         return {
             "server_online": self.server_online,
@@ -366,28 +432,31 @@ class TelemetryBridge:
                     "right_stick_y": s.right_stick_y,
                     "throttle": s.throttle,
                     "brake": s.brake,
-                    "buttons": dict(s.buttons),
-                    "latency_wave": list(s.latency_history),
-                    "stick_x_wave": list(s.stick_x_history),
-                    "stick_y_wave": list(s.stick_y_history),
-                    "right_stick_x_wave": list(s.right_stick_x_history),
-                    "right_stick_y_wave": list(s.right_stick_y_history),
-                    "throttle_wave": list(s.throttle_history),
-                    "brake_wave": list(s.brake_history),
-                    "raw_angle_wave": list(self.raw_angle_history),
-                    "kalman_angle_wave": list(self.kalman_angle_history),
-                    "filtered_angle": self.latest_filtered_angle
+                    "buttons": s.buttons,
+                    "large_motor_rumble": s.large_motor_rumble,
+                    "small_motor_rumble": s.small_motor_rumble,
+                    "latency_wave": s.latency_history,
+                    "stick_x_wave": s.stick_x_history,
+                    "stick_y_wave": s.stick_y_history,
+                    "right_stick_x_wave": s.right_stick_x_history,
+                    "right_stick_y_wave": s.right_stick_y_history,
+                    "throttle_wave": s.throttle_history,
+                    "brake_wave": s.brake_history,
+                    "raw_angle_wave": s.raw_angle_history,
+                    "kalman_angle_wave": s.kalman_angle_history,
+                    "steering_angle": s.latest_raw_angle if s.connected else 0.0,
+                    "filtered_angle": s.latest_filtered_angle if s.connected else 0.0
                 }
                 for s in self.slots
             ],
-            "latency_wave": list(self.latency_history),
-            "stick_x_wave": list(self.stick_x_history),
-            "stick_y_wave": list(self.stick_y_history),
-            "right_stick_x_wave": list(self.right_stick_x_history),
-            "right_stick_y_wave": list(self.right_stick_y_history),
-            "throttle_wave": list(self.throttle_history),
-            "brake_wave": list(self.brake_history),
-            "rate_wave": list(self.rate_history),
-            "raw_angle_wave": list(self.raw_angle_history),
-            "kalman_angle_wave": list(self.kalman_angle_history)
+            "latency_wave": self.latency_history,
+            "stick_x_wave": self.stick_x_history,
+            "stick_y_wave": self.stick_y_history,
+            "right_stick_x_wave": self.right_stick_x_history,
+            "right_stick_y_wave": self.right_stick_y_history,
+            "throttle_wave": self.throttle_history,
+            "brake_wave": self.brake_history,
+            "rate_wave": self.rate_history,
+            "raw_angle_wave": self.raw_angle_history,
+            "kalman_angle_wave": self.kalman_angle_history
         }

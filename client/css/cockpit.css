@@ -1405,3 +1405,31 @@ body.forced-landscape-portrait .splash-screen {
   background: var(--cyan-neon);
   color: #000000;
 }
+
+/* Real-Time Visual Haptic Vignette on Game Vibrations (Goal Explosions, Heavy Hits) */
+@keyframes hapticVignettePulse {
+  0% { box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.15); }
+  50% { box-shadow: inset 0 0 45px rgba(255, 255, 255, 0.45), 0 0 25px rgba(255, 255, 255, 0.25); }
+  100% { box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.15); }
+}
+
+.haptic-rumbling {
+  animation: hapticVignettePulse 0.11s infinite ease-in-out !important;
+}
+
+.l1-test-vibe-btn {
+  background: #1c2128;
+  color: #f0f6fc;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.l1-test-vibe-btn:active {
+  background: #ffffff;
+  color: #08090b;
+}

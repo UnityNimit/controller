@@ -2,7 +2,7 @@
 Project Controller - Synthetic Racing Physics & Telemetry Simulator
 Generates a continuous, high-fidelity physics telemetry stream replicating
 a racing circuit lap (RPM sweeps, gear shifts, cornering tire slip, braking Gs,
-curb vibrations, and collision pulses) for testing and academic viva defense.
+curb vibrations, and collision pulses) for testing and performance evaluation.
 """
 
 import math

@@ -174,3 +174,60 @@ def test_first_client_always_player1_guarantee():
     # it is GUARANTEED to connect as Player 1 (Slot 0)
     assert mgr.allocate_slot("client_solo_with_pref", preferred_slot=2) == 0
 
+
+def test_continuous_analog_360_flick_trajectory_and_high_rate_ingestion():
+    """
+    Verifies:
+    1. Pure 360-degree analog fidelity without cardinal axis snapping (88°, 92°, 268°, etc.).
+    2. Multi-stage flick snapback velocity curve for skate/sports game trick engines.
+    3. Direct packet ingestion into TelemetryBridge preserving every intermediate packet in history.
+    """
+    import math
+    from gui.state_bridge import TelemetryBridge
+
+    mgr = InputManager(force_mock=True, max_players=2)
+    client_id = "analog_flick_pro"
+    slot = mgr.allocate_slot(client_id)
+    assert slot == 0
+    ctrl: MockGamepad = mgr.controllers[0]
+
+    bridge = TelemetryBridge(history_len=50)
+    bridge.register_client(0, client_id, "192.168.1.55")
+
+    # 1. Verify off-axis analog steering without snapping
+    # 88 degrees: close to 90 degrees vertical, but X MUST NOT be clamped to 0!
+    rad_88 = math.radians(88.0)
+    expected_x = int(round(math.cos(rad_88) * 32767))  # ~1143
+    expected_y = int(round(math.sin(rad_88) * 32767))  # ~32747
+    assert expected_x > 0, "Off-axis X component must be non-zero (no cardinal snap)"
+
+    mgr.dispatch(client_id, {"stick_x": expected_x, "stick_y": expected_y})
+    assert ctrl.steering == expected_x
+    assert ctrl.left_stick_y == expected_y
+
+    # 2. Simulate rapid flick decay sequence (e.g. flick in Skate: 100% -> 50% -> 15% -> 0%)
+    flick_trajectory = [
+        (32000, -32000),  # Peak flick
+        (16000, -16000),  # Spring return step 1
+        (4800, -4800),    # Spring return step 2
+        (0, 0)            # Final resting neutral
+    ]
+
+    for sx, sy in flick_trajectory:
+        mgr.dispatch(client_id, {"stick_x": sx, "stick_y": sy})
+        bridge.record_input(
+            slot_index=0,
+            client_id=client_id,
+            control_state={"stick_x": sx, "stick_y": sy},
+            client_rtt=1.2,
+            inter_arrival_ms=4.0
+        )
+
+    # All intermediate flick trajectory points must be captured in the history deque
+    snap = bridge.get_snapshot()
+    s0 = snap["slots"][0]
+    recorded_points = [pt[1] for pt in list(s0["stick_x_wave"])[-4:]]
+    assert recorded_points == [32000, 16000, 4800, 0], f"Flick trajectory lost intermediate samples: {recorded_points}"
+    assert ctrl.steering == 0
+    assert ctrl.left_stick_y == 0
+

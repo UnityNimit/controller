@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="css/cockpit.css">
 </head>
 <body>
+  <!-- Hidden Native iOS 17.4+ Haptic Switch -->
+  <input type="checkbox" switch id="ios-haptic-switch" style="position:fixed;top:-500px;left:-500px;opacity:0.0001;pointer-events:none;z-index:-9999;" />
 
   <!-- =======================================================================
        1. STARTING SCREEN: Pure Pitch Black with Logo.png in Absolute Center
@@ -146,6 +148,7 @@
       <div class="l1-custom-hud" id="l1-custom-hud">
         <div class="l1-custom-badge"><span class="l1-pulse-dot"></span>CUSTOMIZE MODE</div>
         <div class="l1-custom-instructions">Drag • Corner to Resize • Tap Stick for Radius</div>
+        <button class="l1-test-vibe-btn" id="l1-test-vibe-btn" type="button" title="Test Phone Vibration & Haptics">⚡ VIBE TEST</button>
         <button class="l1-reset-btn" id="l1-reset-btn" type="button" title="Reset Layout to Factory Defaults">Reset</button>
         <div class="l1-save-cue">HOLD LOGO TO SAVE</div>
       </div>

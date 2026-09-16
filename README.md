@@ -1,8 +1,8 @@
 # PROJECT CONTROLLER
 
-> **Academic Title**: High-Performance Cyber-Physical Teleoperation Framework with Bi-Directional Haptic Telemetry and Multi-Sensor Fusion for Mobile Edge Devices  
+> **Title**: High-Performance Cyber-Physical Teleoperation Framework with Bi-Directional Haptic Telemetry and Multi-Sensor Fusion for Mobile Edge Devices  
 > **Project Codename**: `Project Controller`  
-> **Target Evaluation**: Cyber-Physical Systems, Internet of Things (IoT), and Real-Time Teleoperation Viva Defense (Evaluator: Dr. Abhishek Jain)
+> **Target**: Ultra-low latency wireless controller emulation, competitive esports telemetry, and dynamic mobile haptics
 
 ---
 
@@ -136,7 +136,8 @@ controller/
 │   ├── install_driver.ps1        # PowerShell driver installation helper
 │   ├── run_gateway.py            # Primary CLI server launcher
 │   ├── run_benchmark.py          # Automated multi-client network load tester
-│   └── export_viva_graphs.py     # Matplotlib QoS graph generator for viva report
+│   ├── benchmark_suite.py        # Microsecond benchmark & FFT diagnostics suite
+│   └── export_telemetry_graphs.py# Matplotlib QoS graph generator
 └── tests/
     ├── test_filters.py           # DSP filter unit tests
     ├── test_security.py          # Cryptographic handshake & firewall tests
@@ -168,32 +169,31 @@ To enable native Xbox 360 gamepad emulation in racing games, run the one-click i
 
 ### Step 3: Launch Project Controller Gateway
 ```powershell
-python scripts/run_gateway.py --sim
+python main.py
 ```
-* The terminal displays an ASCII banner and a **QR Code**.
-* Point your smartphone camera at the monitor or navigate to `https://<HOST_IP>:8443`.
+* The dashboard displays the live 4-player HUD, system badges, and **QR Code**.
+* Point your smartphone camera at the QR code or navigate to `https://<HOST_IP>:8443`.
 * Tap **ENGAGE COCKPIT** on the phone to enable motion sensors and audio synthesis.
 
 ---
 
-## 7. Verification, Testing & Academic Viva Defense
+## 7. Verification, Testing & Performance Diagnostics
 
 ### Running Automated Test Suites
-Run the full 16-test suite verifying mathematics, cryptography, and network pipelines:
+Run the full test suite verifying mathematics, cryptography, and network pipelines:
 ```powershell
 python -m pytest tests -v
 ```
-*(All 16 tests pass with 100% test coverage of core modules).*
 
-### Generating QoS Latency & Viva Evaluation Graphs
+### Generating QoS Latency & Telemetry Evaluation Graphs
 Generate the QoS metrics and publication-ready Matplotlib figures:
 ```powershell
-python scripts/export_viva_graphs.py
+python scripts/export_telemetry_graphs.py
 ```
-Output artifacts generated in `benchmark_results/`:
+Output artifacts generated in `documentation/figures/` and `documentation/data/`:
 1. `fig1_signal_conditioning.png`: Demonstrates raw MEMS gyroscope noise rejection via the cascaded EMA and deadband filters.
 2. `fig2_jitter_distribution.png`: Demonstrates packet arrival consistency with sub-1ms network jitter.
-3. `qos_telemetry_dataset.csv`: Flight recorder telemetry dataset for tabular analysis.
+3. `qos_telemetry_dataset.csv`: Telemetry dataset for tabular analysis.
 
 ### Multi-Client Network Load Benchmark
 Execute automated multi-client load testing:
@@ -203,9 +203,9 @@ python scripts/run_benchmark.py --url ws://127.0.0.1:8080/ws --clients 2 --durat
 
 ---
 
-## 8. Academic Viva Defense Guide (Dr. Abhishek Jain Evaluation)
+## 8. Technical Architecture FAQ & Engineering Overview
 
-| Defense Topic | Technical Justification |
+| Engineering Topic | Technical Justification |
 | :--- | :--- |
 | **Why WebSockets over Bluetooth?** | Bluetooth Serial Port Profile (SPP) and BLE GATT have high round-trip latency ($\ge 25\text{ ms}$), restrictive bandwidth, and rigid OS pairing limits. WebSockets over 5 GHz 802.11ac Wi-Fi delivers **$< 3\text{ ms}$ latency**, full bidirectional streaming (telemetry downlink + input uplink), and simultaneous multi-client orchestration (up to 4 controllers) with zero app store installation. |
 | **Signal Conditioning & Drift Prevention** | Gyro integration typically suffers from thermal drift. Rather than integrating unbounded angular velocity, Project Controller combines absolute gravitational roll angles with an EMA filter ($\alpha = 0.35$) and an adaptive deadband ($1.2^\circ$), guaranteeing zero drift at straight line tracking. |
@@ -215,4 +215,4 @@ python scripts/run_benchmark.py --url ws://127.0.0.1:8080/ws --clients 2 --durat
 ---
 
 ## License
-MIT License. Developed for academic demonstration and research in Cyber-Physical Human-Machine Interfaces.
+MIT License. Developed for low-latency teleoperation and virtual controller emulation.

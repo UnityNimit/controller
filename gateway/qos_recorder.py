@@ -125,9 +125,9 @@ class QoSRecorder:
         logger.info(f"Exported {len(records)} QoS telemetry records to {file_path}")
         return file_path
 
-    def export_viva_charts(self, output_dir: Path) -> List[Path]:
+    def export_telemetry_charts(self, output_dir: Path) -> List[Path]:
         """
-        Generates publication-quality academic charts using Matplotlib:
+        Generates publication-quality technical charts using Matplotlib:
         1. QoS Latency & Jitter Distribution Histogram
         2. Signal Conditioning: Raw Gyroscope Noise vs. EMA Filter
         3. Real-Time Packet Arrival Stability (Jitter Timeline)
@@ -179,5 +179,8 @@ class QoSRecorder:
         plt.close(fig)
         generated_files.append(chart2_path)
 
-        logger.info(f"Generated {len(generated_files)} viva evaluation plots in {output_dir}")
+        logger.info(f"Generated {len(generated_files)} telemetry evaluation plots in {output_dir}")
         return generated_files
+
+    # Backward-compatible alias
+    export_viva_charts = export_telemetry_charts

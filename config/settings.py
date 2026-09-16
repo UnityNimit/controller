@@ -100,7 +100,7 @@ class QoSConfig:
     # Capacity of active in-memory flight telemetry ring buffer
     RING_BUFFER_SIZE: int = 10000
     
-    # Directory for logs and Viva graph exports
+    # Directory for logs and telemetry graph exports
     LOG_DIR: Path = BASE_DIR / "logs"
     EXPORT_CSV: bool = True
 

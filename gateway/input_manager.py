@@ -75,6 +75,10 @@ class AbstractGamepad(ABC):
         pass
 
 
+# Retain permanent references to ViGEm CFUNCTYPE thunks so Windows kernel driver callbacks never jump into freed ctypes memory
+_PERMANENT_VIGEM_CALLBACK_THUNKS: List[Any] = []
+
+
 class ViGEmXInputGamepad(AbstractGamepad):
     """Native virtual Xbox 360 controller backed by ViGEmBus with force feedback rumble."""
     def __init__(self, player_index: int = 0, on_rumble=None):
@@ -82,6 +86,10 @@ class ViGEmXInputGamepad(AbstractGamepad):
         self.vg = vg
         self.player_index = player_index
         self.on_rumble = on_rumble
+        self.large_motor_rumble = 0
+        self.small_motor_rumble = 0
+        self._notification_cb_ref = None
+        self._closed = False
         self.gamepad = vg.VX360Gamepad()
         
         self.button_map = {
@@ -105,17 +113,29 @@ class ViGEmXInputGamepad(AbstractGamepad):
         logger.info(f"Initialized native ViGEmBus Virtual Xbox 360 controller for Player {player_index + 1}")
 
     def _register_rumble_cb(self) -> None:
-        if self.on_rumble is not None:
-            def _notification_cb(client, target, large_motor, small_motor, led_number, user_data):
-                try:
-                    if self.on_rumble is not None:
-                        self.on_rumble(self.player_index, int(large_motor), int(small_motor))
-                except Exception:
-                    pass
+        """Registers closed-loop force-feedback notification callback with Windows kernel ViGEmBus driver."""
+        # Signature required by vgamepad: (client, target, large_motor, small_motor, led_number, user_data)
+        def _notification_cb(client, target, large_motor, small_motor, led_number, user_data):
+            if getattr(self, "_closed", False):
+                return
             try:
-                self.gamepad.register_notification(callback_function=_notification_cb)
+                lm = int(large_motor)
+                sm = int(small_motor)
+                self.large_motor_rumble = lm
+                self.small_motor_rumble = sm
+                if self.on_rumble is not None:
+                    self.on_rumble(self.player_index, lm, sm)
             except Exception as e:
-                logger.debug(f"Could not register rumble notification: {e}")
+                logger.debug(f"Rumble callback dispatch error on Player {self.player_index + 1}: {e}")
+
+        self._notification_cb_ref = _notification_cb
+        try:
+            self.gamepad.register_notification(callback_function=_notification_cb)
+            if hasattr(self.gamepad, "cmp_func") and self.gamepad.cmp_func is not None:
+                _PERMANENT_VIGEM_CALLBACK_THUNKS.append(self.gamepad.cmp_func)
+            logger.info(f"Registered ViGEmBus force-feedback haptic rumble notification for Player {self.player_index + 1}")
+        except Exception as e:
+            logger.warning(f"Could not register ViGEm rumble notification for Player {self.player_index + 1}: {e}")
 
     def set_stick(self, x_val: int, y_val: int = 0) -> None:
         if x_val == 0 and y_val == 0:
@@ -183,8 +203,20 @@ class ViGEmXInputGamepad(AbstractGamepad):
         self.gamepad.update()
 
     def close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        try:
+            if hasattr(self.gamepad, "unregister_notification"):
+                self.gamepad.unregister_notification()
+        except Exception:
+            pass
         try:
             self.reset()
+        except Exception:
+            pass
+        time.sleep(0.04)
+        try:
             del self.gamepad
         except Exception:
             pass
@@ -374,6 +406,9 @@ class InputManager:
         for ctrl in self.controllers:
             if hasattr(ctrl, "on_rumble"):
                 ctrl.on_rumble = cb
+                if hasattr(ctrl, "gamepad") and getattr(ctrl.gamepad, "cmp_func", None) is None:
+                    if hasattr(ctrl, "_register_rumble_cb"):
+                        ctrl._register_rumble_cb()
 
     def _init_controllers(self) -> None:
         for i in range(self.max_players):
@@ -554,8 +589,7 @@ class InputManager:
         return True
 
     def pulse_test_button(self, slot_idx: int) -> None:
-        """Sends a momentary Button A press (for 120ms in a background thread) on slot_idx
-        to satisfy browser W3C Gamepad API user gesture requirements on online testers (e.g. hardwaretester.com/gamepad)."""
+        """Sends a momentary Button A press (for 120ms) on slot_idx and triggers a test rumble burst."""
         if 0 <= slot_idx < len(self.controllers):
             ctrl = self.controllers[slot_idx]
             import threading
@@ -563,9 +597,15 @@ class InputManager:
                 try:
                     ctrl.set_button("A", True)
                     ctrl.update()
-                    time.sleep(0.12)
+                    # Trigger momentary hardware rumble test if callback is active
+                    if self.rumble_callback is not None:
+                        self.rumble_callback(slot_idx, 255, 255)
+                    time.sleep(0.15)
                     ctrl.set_button("A", False)
                     ctrl.update()
+                    time.sleep(0.20)
+                    if self.rumble_callback is not None:
+                        self.rumble_callback(slot_idx, 0, 0)
                 except Exception as e:
                     logger.debug(f"Pulse test error on slot {slot_idx}: {e}")
             threading.Thread(target=_pulse, daemon=True, name=f"PulseTest-P{slot_idx+1}").start()
@@ -589,6 +629,8 @@ class InputManager:
                 ctrl.close()
             self.controllers.clear()
             self._init_controllers()
+            if self.rumble_callback is not None:
+                self.set_rumble_callback(self.rumble_callback)
             return True
         return False
 

@@ -1,4 +1,4 @@
-# PROJECT CONTROLLER PRO: Low-Latency Asymmetric Cyber-Physical Teleoperation & Kernel Virtualization Architecture
+# PROJECT CONTROLLER: Low-Latency Asymmetric Cyber-Physical Teleoperation & Kernel Virtualization Architecture
 
 **Course**: Computer Engineering / Computer Systems Laboratory (Semester 5)  
 **Academic Year**: 2025–2026  
@@ -11,7 +11,7 @@
 
 Traditional human-computer interaction (HCI) in PC gaming and interactive simulation environments remains heavily bound to proprietary physical peripherals (e.g., Microsoft Xbox Wireless Controllers, Sony DualSense). Commercial gamepads introduce significant hardware costs, driver friction, single-vendor lock-in, and physical wear-and-tear (e.g., potentiometer analog stick drift). While software-based remote control alternatives exist, they universally suffer from multi-frame buffering delays ($>30\text{ ms}$ latency), intrusive native application installations, complex pairing procedures, and lack of true kernel-level hardware virtualization.
 
-**Project Controller Pro** presents an ultra-low-latency, zero-install cyber-physical teleoperation framework. By leveraging standard W3C Web APIs (WebSockets, Touch Events Level 2, DeviceOrientation API) running inside commodity mobile browsers (iOS Safari, Android Chrome), any modern smartphone is instantly transformed into a certified Microsoft Xbox 360 controller with zero client-side installation. 
+**Project Controller** presents an ultra-low-latency, zero-install cyber-physical teleoperation framework. By leveraging standard W3C Web APIs (WebSockets, Touch Events Level 2, DeviceOrientation API) running inside commodity mobile browsers (iOS Safari, Android Chrome), any modern smartphone is instantly transformed into a certified Microsoft Xbox 360 controller with zero client-side installation. 
 
 Key architectural and scientific contributions of this work include:
 1. **Asymmetric Sub-5ms Asynchronous Teleoperation Pipeline**: Built upon Python's non-blocking `asyncio` event loop with binary/JSON WebSocket framing operating deterministically at $60\text{ Hz} - 100\text{ Hz}$.
@@ -72,7 +72,7 @@ Mobile micro-electro-mechanical systems (MEMS) gyroscopes and capacitive touch d
 - Involuntary human physiological hand tremors occurring in the $8\text{ Hz} - 12\text{ Hz}$ band.
 - Capacitive touch quantization jitter caused by variable finger contact patch surface area.
 
-Direct mapping of unfiltered raw sensor data produces erratic steering flutter, unstable stick deflection, and unintended vehicle oscillation in simulation environments. Project Controller Pro deploys a multi-stage discrete filter pipeline.
+Direct mapping of unfiltered raw sensor data produces erratic steering flutter, unstable stick deflection, and unintended vehicle oscillation in simulation environments. Project Controller deploys a multi-stage discrete filter pipeline.
 
 ### 2.1 First-Order Exponential Moving Average (EMA) Filter
 
@@ -105,7 +105,7 @@ Where:
 
 ### 2.3 Non-Linear Progressive Gamma Steering Curve
 
-Human motor precision is highest near neutral deflection and diminishes at large angular extremes. A linear mapping forces a compromise between high-speed straight-line stability and sharp cornering response. Project Controller Pro applies a parametric power-law (gamma) transformation:
+Human motor precision is highest near neutral deflection and diminishes at large angular extremes. A linear mapping forces a compromise between high-speed straight-line stability and sharp cornering response. Project Controller applies a parametric power-law (gamma) transformation:
 
 $$y_{\text{out}}[k] = \text{sgn}(x_{\text{db}}[k]) \cdot \left| x_{\text{db}}[k] \right|^\gamma$$
 
@@ -171,7 +171,7 @@ User-space input emulation frameworks (such as Windows `SendInput` API) suffer f
 
 ### 3.1 Kernel Bus Driver Integration
 
-Project Controller Pro interfaces directly with the **Virtual Gamepad Emulation Bus (`ViGEmBus`)**, a signed Microsoft Windows kernel-mode driver (`WDF` / `KMDF`).
+Project Controller interfaces directly with the **Virtual Gamepad Emulation Bus (`ViGEmBus`)**, a signed Microsoft Windows kernel-mode driver (`WDF` / `KMDF`).
 
 ```
 +-------------------------------------------------------------+
@@ -205,7 +205,7 @@ Multi-controller management is governed by `gateway/input_manager.py`. In local 
 
 ### 3.3 Closed-Loop Bidirectional Force-Feedback Haptic Telepresence
 
-Unlike uni-directional virtual gamepads, Project Controller Pro establishes a full closed-loop cyber-physical tactile loopback:
+Unlike uni-directional virtual gamepads, Project Controller establishes a full closed-loop cyber-physical tactile loopback:
 1. **Kernel Rumble Interception**: The `ViGEmBus` driver registers a virtual notification callback via `vigem_register_x360_notification`. When a game engine (e.g. Assetto Corsa, Forza Horizon, Rocket League) activates rumble motors, the driver captures:
    - `large_motor`: Heavy low-frequency engine revs and collisions ($[0, 65535]$).
    - `small_motor`: Crisp high-frequency curb strikes and surface textures ($[0, 65535]$).
@@ -330,7 +330,7 @@ To maintain clean code governance, separation of concerns, and reproducible depl
 controller/
 ├── build/                           # Production Executable & Portable Release
 │   ├── Controller.exe               # Standalone PyInstaller Windows binary
-│   ├── Project-Controller-Pro.zip   # Full zip distribution with driver & manuals
+│   ├── Project-Controller.zip       # Full zip distribution with driver & manuals
 │   ├── Install-Driver.bat           # Automated elevated driver setup script
 │   └── HOW-TO-PLAY.txt              # End-user operation manual
 │
@@ -435,7 +435,7 @@ tests/test_telemetry.py::test_outsim_packet_unpacking PASSED             [ 48%]
 
 ## 8. Conclusion & Future Work
 
-Project Controller Pro establishes that commodity web standards can deliver teleoperation performance rivaling physical hardware peripherals. By decoupling sensor ingestion from the operating system via asynchronous networking, applying discrete mathematical noise filtering, and virtualizing hardware at Ring 0, the system achieves sub-5ms round-trip latency, sub-millisecond jitter, and zero driver installation on mobile clients.
+Project Controller establishes that commodity web standards can deliver teleoperation performance rivaling physical hardware peripherals. By decoupling sensor ingestion from the operating system via asynchronous networking, applying discrete mathematical noise filtering, and virtualizing hardware at Ring 0, the system achieves sub-5ms round-trip latency, sub-millisecond jitter, and zero driver installation on mobile clients.
 
 **Future Research Directions**:
 1. **WebRTC Data Channel Integration**: Implementing SCTP over DTLS/UDP to bypass TCP retransmission overhead on lossy Wi-Fi connections.

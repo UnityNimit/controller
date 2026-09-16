@@ -5,6 +5,8 @@ datas = [
     ('client', 'client'),
     ('scripts/ViGEmBusSetup_x64.msi', '.'),
     ('scripts/ViGEmBusSetup_x64.msi', 'scripts'),
+    ('scripts/benchmark_suite.py', 'scripts'),
+    ('scripts/benchmark_suite.py', '.'),
     ('scripts/viva_defense_suite.py', 'scripts'),
     ('scripts/viva_defense_suite.py', '.'),
     ('gui/logo.png', 'gui'),

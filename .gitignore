@@ -67,4 +67,5 @@ desktop.ini
 # IDE
 .vscode/
 .idea/
+.neuron/
 *.swp

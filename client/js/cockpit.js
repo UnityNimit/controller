@@ -6,7 +6,23 @@
 class HapticAudioEngine {
   constructor() {
     this.ctx = null;
-    this.canVibrate = typeof navigator !== "undefined" && "vibrate" in navigator;
+    this.canVibrate = typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+    this.currentLarge = 0;
+    this.currentSmall = 0;
+    this.rumbleLoopTimer = null;
+    this.lastRumbleTime = 0;
+    this.lastVibrateCallTime = 0;
+    this.hapticGain = null;
+    this.oscLarge = null;
+    this.oscSmall = null;
+    this.iosSwitch = null;
+
+    // Attach global once-listeners to unlock AudioContext and iOS Taptic on first touch
+    if (typeof window !== "undefined") {
+      const unlock = () => this.initAudio();
+      window.addEventListener("pointerdown", unlock, { once: true, passive: true });
+      window.addEventListener("touchstart", unlock, { once: true, passive: true });
+    }
   }
 
   initAudio() {
@@ -19,57 +35,235 @@ class HapticAudioEngine {
     if (this.ctx && this.ctx.state === "suspended") {
       this.ctx.resume().catch(() => {});
     }
+    this._ensureIOSSwitch();
+  }
+
+  _ensureIOSSwitch() {
+    if (!this.iosSwitch && typeof document !== "undefined" && document.body) {
+      let sw = document.getElementById("ios-haptic-switch");
+      if (!sw) {
+        try {
+          sw = document.createElement("input");
+          sw.type = "checkbox";
+          sw.setAttribute("switch", "");
+          sw.id = "ios-haptic-switch";
+          sw.style.cssText = "position:fixed;top:-500px;left:-500px;opacity:0.0001;pointer-events:none;z-index:-9999;";
+          document.body.appendChild(sw);
+        } catch (_) {}
+      }
+      this.iosSwitch = sw;
+    }
   }
 
   triggerClick(intensity = "normal") {
+    this._triggerIOSTapticSwitch();
+
     if (this.canVibrate) {
       try {
         if (intensity === "heavy") {
-          navigator.vibrate([16]);
+          navigator.vibrate([22]);
         } else if (intensity === "dpad") {
-          navigator.vibrate([10]);
+          navigator.vibrate([14]);
         } else {
-          navigator.vibrate([8]);
+          navigator.vibrate([10]);
         }
       } catch (_) {}
     }
 
     if (!this.ctx) return;
     try {
+      const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      const now = this.ctx.currentTime;
 
       osc.type = "sine";
-      const freq = intensity === "heavy" ? 110 : intensity === "dpad" ? 160 : 190;
+      const freq = intensity === "heavy" ? 110 : intensity === "dpad" ? 150 : 180;
       osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(30, now + 0.035);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.038);
 
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      const vol = intensity === "heavy" ? 0.35 : 0.22;
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.035);
+      osc.stop(now + 0.040);
     } catch (_) {}
   }
 
   handleRumble(largeMotor = 0, smallMotor = 0) {
-    if (!this.canVibrate) return;
-    const large = Math.max(0, Math.min(255, Number(largeMotor) || 0));
-    const small = Math.max(0, Math.min(255, Number(smallMotor) || 0));
-    if (large === 0 && small === 0) return;
+    const rawL = Number(largeMotor) || 0;
+    const rawS = Number(smallMotor) || 0;
+    const large = rawL > 255 ? Math.round(rawL / 256) : Math.round(rawL);
+    const small = rawS > 255 ? Math.round(rawS / 256) : Math.round(rawS);
+    const clampedLarge = Math.max(0, Math.min(255, large));
+    const clampedSmall = Math.max(0, Math.min(255, small));
 
-    const durationMs = Math.min(160, Math.max(16, Math.round((large / 255) * 120 + (small / 255) * 50)));
+    this.currentLarge = clampedLarge;
+    this.currentSmall = clampedSmall;
+    this.lastRumbleTime = performance.now();
+
+    if (clampedLarge === 0 && clampedSmall === 0) {
+      this._stopAllRumble();
+      return;
+    }
+
+    // 1. Android & Standard Hardware Motor Vibration
+    this._pulseHardwareVibrate(clampedLarge, clampedSmall);
+
+    // 2. iOS Taptic Engine Switch Trigger (iOS 17.4+)
+    this._triggerIOSTapticSwitch();
+
+    // 3. Sub-Bass Physical Acoustic Resonance (deep chassis shake through phone bottom speakers)
+    this._triggerAcousticHaptics(clampedLarge, clampedSmall);
+
+    // 4. Cockpit Screen Edge Visual Vibration Vignette
+    this._triggerVisualHaptics(clampedLarge, clampedSmall);
+
+    // 5. Maintain continuous rumble loop while motors stay on (e.g. goal explosions, burnout)
+    this._ensureRumbleLoop();
+  }
+
+  _pulseHardwareVibrate(large, small) {
+    if (!this.canVibrate) return;
+    const now = performance.now();
+    // Prevent spamming navigator.vibrate faster than once every 65ms to avoid browser rate throttling
+    if (now - this.lastVibrateCallTime < 65) return;
+    this.lastVibrateCallTime = now;
+
+    const normL = large / 255.0;
+    const normS = small / 255.0;
+
     try {
-      if (large > 120 && small > 80) {
-        navigator.vibrate([durationMs, 18, Math.round(durationMs * 0.7)]);
-      } else {
-        navigator.vibrate([durationMs]);
+      if (normL > 0.45 && normS > 0.45) {
+        // Heavy impact / Goal explosion / Demolition / Curb collision
+        navigator.vibrate([140, 20, 90]);
+      } else if (normL > 0.1) {
+        // Low engine rumble / Acceleration / Off-road surface
+        const dur = Math.round(50 + normL * 90);
+        navigator.vibrate([dur]);
+      } else if (normS > 0.1) {
+        // High-frequency buzz / Slip / RPM redline / Tire screech
+        const dur = Math.round(25 + normS * 60);
+        navigator.vibrate([dur, 15, dur]);
       }
     } catch (_) {}
+  }
+
+  _ensureRumbleLoop() {
+    if (this.rumbleLoopTimer) return;
+    this.rumbleLoopTimer = setInterval(() => {
+      const now = performance.now();
+      // Watchdog timeout: if no new rumble packet in 650ms, game stopped or paused
+      if (now - this.lastRumbleTime > 650) {
+        this._stopAllRumble();
+        return;
+      }
+      if (this.currentLarge > 0 || this.currentSmall > 0) {
+        this._pulseHardwareVibrate(this.currentLarge, this.currentSmall);
+        this._triggerIOSTapticSwitch();
+        this._triggerAcousticHaptics(this.currentLarge, this.currentSmall);
+      } else {
+        this._stopAllRumble();
+      }
+    }, 130);
+  }
+
+  _stopAllRumble() {
+    this.currentLarge = 0;
+    this.currentSmall = 0;
+    if (this.rumbleLoopTimer) {
+      clearInterval(this.rumbleLoopTimer);
+      this.rumbleLoopTimer = null;
+    }
+    if (this.canVibrate) {
+      try {
+        navigator.vibrate(0);
+      } catch (_) {}
+    }
+    this._stopAcousticHaptics();
+    this._stopVisualHaptics();
+  }
+
+  _triggerIOSTapticSwitch() {
+    this._ensureIOSSwitch();
+    if (this.iosSwitch) {
+      try {
+        this.iosSwitch.checked = !this.iosSwitch.checked;
+      } catch (_) {}
+    }
+  }
+
+  _triggerAcousticHaptics(large, small) {
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      if (!this.hapticGain) {
+        this.hapticGain = this.ctx.createGain();
+        this.hapticGain.gain.setValueAtTime(0.0001, now);
+        this.hapticGain.connect(this.ctx.destination);
+
+        // Sub-bass 55Hz sine wave (Large heavy motor resonance)
+        this.oscLarge = this.ctx.createOscillator();
+        this.oscLarge.type = "sine";
+        this.oscLarge.frequency.setValueAtTime(55, now);
+        this.oscLarge.connect(this.hapticGain);
+        this.oscLarge.start();
+
+        // 135Hz triangle harmonic (Small light motor resonance)
+        this.oscSmall = this.ctx.createOscillator();
+        this.oscSmall.type = "triangle";
+        this.oscSmall.frequency.setValueAtTime(135, now);
+        this.oscSmall.connect(this.hapticGain);
+        this.oscSmall.start();
+      }
+
+      const normL = large / 255.0;
+      const normS = small / 255.0;
+      // Target gain: tactile chassis resonance through smartphone speaker body
+      const targetGain = Math.min(0.75, (normL * 0.48) + (normS * 0.27));
+      this.hapticGain.gain.cancelScheduledValues(now);
+      this.hapticGain.gain.setTargetAtTime(targetGain, now, 0.025);
+    } catch (_) {}
+  }
+
+  _stopAcousticHaptics() {
+    if (this.hapticGain && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        this.hapticGain.gain.cancelScheduledValues(now);
+        this.hapticGain.gain.setTargetAtTime(0.0001, now, 0.025);
+      } catch (_) {}
+    }
+  }
+
+  _triggerVisualHaptics(large, small) {
+    if (typeof document === "undefined") return;
+    const frame = document.getElementById("gamepad-frame");
+    if (frame) {
+      if (large > 50 || small > 50) {
+        frame.classList.add("haptic-rumbling");
+      } else {
+        frame.classList.remove("haptic-rumbling");
+      }
+    }
+  }
+
+  _stopVisualHaptics() {
+    if (typeof document === "undefined") return;
+    const frame = document.getElementById("gamepad-frame");
+    if (frame) {
+      frame.classList.remove("haptic-rumbling");
+    }
+  }
+
+  testHapticPulse() {
+    this.initAudio();
+    this.handleRumble(255, 255);
+    setTimeout(() => this.handleRumble(150, 220), 180);
+    setTimeout(() => this.handleRumble(0, 0), 450);
   }
 }
 
@@ -920,9 +1114,24 @@ class GamepadClient {
 
   _startLoop() {
     let lastPing = 0;
+
+    // Dedicated continuous high-frequency 250 Hz (4ms) transmission pump
+    // Streams uninterrupted controller frames whether neutral or active, exactly like a real physical controller!
+    if (this._transmitTimer) clearInterval(this._transmitTimer);
+    this._transmitTimer = setInterval(() => {
+      if (this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const now = performance.now();
+        // Minimum 3.0ms spacing between packets to avoid duplicate flooding on top of pointer events
+        if (now - this._lastSendTime >= 3.0) {
+          this.sendInputNow(false);
+        }
+      }
+    }, 4);
+
     const loop = () => {
       const now = performance.now();
 
+      // Prioritize active touch inputs every display frame
       if (
         this.leftStickActive ||
         this.rightStickActive ||
@@ -930,7 +1139,9 @@ class GamepadClient {
         this.brake > 0 ||
         this.gyroEnabled
       ) {
-        this.sendInputNow();
+        if (now - this._lastSendTime >= 2.0) {
+          this.sendInputNow(false);
+        }
       }
 
       if (now - lastPing >= 1000) {
@@ -1027,13 +1238,53 @@ class GamepadClient {
     const resetLeftStick = () => {
       this.leftStickActive = false;
       this.leftStickPointerId = null;
-      this.stickX = 0;
-      this.stickY = 0;
-      if (leftPuck1) leftPuck1.style.transform = "translate(0px, 0px)";
-      if (leftPuck2) leftPuck2.style.transform = "translate(0px, 0px)";
-      this.sendInputNow(true);
-      setTimeout(() => this.sendInputNow(true), 8);
-      setTimeout(() => this.sendInputNow(true), 24);
+
+      const startX = this.stickX;
+      const startY = this.stickY;
+      const mag = Math.hypot(startX, startY);
+
+      if (leftPuck1) {
+        leftPuck1.style.transition = "transform 0.05s cubic-bezier(0.1, 0.9, 0.2, 1)";
+        leftPuck1.style.transform = "translate(0px, 0px)";
+      }
+      if (leftPuck2) {
+        leftPuck2.style.transition = "transform 0.05s cubic-bezier(0.1, 0.9, 0.2, 1)";
+        leftPuck2.style.transform = "translate(0px, 0px)";
+      }
+
+      if (mag > 1200) {
+        // High-speed physical spring-return simulation (decays in ~20ms across 3 steps for game flick detection)
+        this.sendInputNow(true);
+        setTimeout(() => {
+          if (!this.leftStickActive) {
+            this.stickX = Math.round(startX * 0.50);
+            this.stickY = Math.round(startY * 0.50);
+            this.sendInputNow(true);
+          }
+        }, 6);
+        setTimeout(() => {
+          if (!this.leftStickActive) {
+            this.stickX = Math.round(startX * 0.15);
+            this.stickY = Math.round(startY * 0.15);
+            this.sendInputNow(true);
+          }
+        }, 14);
+        setTimeout(() => {
+          if (!this.leftStickActive) {
+            this.stickX = 0;
+            this.stickY = 0;
+            this.sendInputNow(true);
+            if (leftPuck1) leftPuck1.style.transition = "none";
+            if (leftPuck2) leftPuck2.style.transition = "none";
+          }
+        }, 22);
+      } else {
+        this.stickX = 0;
+        this.stickY = 0;
+        this.sendInputNow(true);
+        if (leftPuck1) leftPuck1.style.transition = "none";
+        if (leftPuck2) leftPuck2.style.transition = "none";
+      }
     };
 
     const bindLeftStickAnchor = (anchor) => {
@@ -1043,6 +1294,9 @@ class GamepadClient {
         e.preventDefault();
         e.stopPropagation();
         if (this.leftStickPointerId !== null) return;
+
+        if (leftPuck1) leftPuck1.style.transition = "none";
+        if (leftPuck2) leftPuck2.style.transition = "none";
 
         this.leftStickPointerId = e.pointerId;
         this.leftStickActive = true;
@@ -1066,13 +1320,53 @@ class GamepadClient {
     const resetRightStick = () => {
       this.rightStickActive = false;
       this.rightStickPointerId = null;
-      this.rightStickX = 0;
-      this.rightStickY = 0;
-      if (rightPuck1) rightPuck1.style.transform = "translate(0px, 0px)";
-      if (rightPuck2) rightPuck2.style.transform = "translate(0px, 0px)";
-      this.sendInputNow(true);
-      setTimeout(() => this.sendInputNow(true), 8);
-      setTimeout(() => this.sendInputNow(true), 24);
+
+      const startX = this.rightStickX;
+      const startY = this.rightStickY;
+      const mag = Math.hypot(startX, startY);
+
+      if (rightPuck1) {
+        rightPuck1.style.transition = "transform 0.05s cubic-bezier(0.1, 0.9, 0.2, 1)";
+        rightPuck1.style.transform = "translate(0px, 0px)";
+      }
+      if (rightPuck2) {
+        rightPuck2.style.transition = "transform 0.05s cubic-bezier(0.1, 0.9, 0.2, 1)";
+        rightPuck2.style.transform = "translate(0px, 0px)";
+      }
+
+      if (mag > 1200) {
+        // High-speed physical spring-return simulation (decays in ~20ms across 3 steps for game flick detection)
+        this.sendInputNow(true);
+        setTimeout(() => {
+          if (!this.rightStickActive) {
+            this.rightStickX = Math.round(startX * 0.50);
+            this.rightStickY = Math.round(startY * 0.50);
+            this.sendInputNow(true);
+          }
+        }, 6);
+        setTimeout(() => {
+          if (!this.rightStickActive) {
+            this.rightStickX = Math.round(startX * 0.15);
+            this.rightStickY = Math.round(startY * 0.15);
+            this.sendInputNow(true);
+          }
+        }, 14);
+        setTimeout(() => {
+          if (!this.rightStickActive) {
+            this.rightStickX = 0;
+            this.rightStickY = 0;
+            this.sendInputNow(true);
+            if (rightPuck1) rightPuck1.style.transition = "none";
+            if (rightPuck2) rightPuck2.style.transition = "none";
+          }
+        }, 22);
+      } else {
+        this.rightStickX = 0;
+        this.rightStickY = 0;
+        this.sendInputNow(true);
+        if (rightPuck1) rightPuck1.style.transition = "none";
+        if (rightPuck2) rightPuck2.style.transition = "none";
+      }
     };
 
     const bindRightStickAnchor = (anchor) => {
@@ -1082,6 +1376,9 @@ class GamepadClient {
         e.preventDefault();
         e.stopPropagation();
         if (this.rightStickPointerId !== null) return;
+
+        if (rightPuck1) rightPuck1.style.transition = "none";
+        if (rightPuck2) rightPuck2.style.transition = "none";
 
         this.rightStickPointerId = e.pointerId;
         this.rightStickActive = true;
@@ -1161,10 +1458,16 @@ class GamepadClient {
     const handleButtonPointerUp = (e) => {
       if (this.isCustomizingLayout1) return;
       if (e.pointerId === this.leftStickPointerId) {
+        if (e.clientX !== undefined && e.clientY !== undefined) {
+          this._updateLeftStickFromPointer(e.clientX, e.clientY);
+        }
         resetLeftStick();
         return;
       }
       if (e.pointerId === this.rightStickPointerId) {
+        if (e.clientX !== undefined && e.clientY !== undefined) {
+          this._updateRightStickFromPointer(e.clientX, e.clientY);
+        }
         if (!this.rightStickMoved) {
           this.buttons.RS = true;
           this.haptics.triggerClick("heavy");
@@ -1248,7 +1551,7 @@ class GamepadClient {
       puckEl.style.transform = `translate(${localDx}px, ${localDy}px)`;
     }
 
-    const deadzone = 0.08;
+    const deadzone = 0.05;
     const normDist = Math.min(1.0, dist / maxRadius);
 
     if (normDist < deadzone) {
@@ -1259,34 +1562,8 @@ class GamepadClient {
       const cartY = -dy;
       const cartX = dx;
       const angleRad = Math.atan2(cartY, cartX);
-      const angleDeg = ((angleRad * 180 / Math.PI) + 360) % 360;
-
-      // Cardinal Snapping for Menus (+/- 18 degrees around 90, 270, 0/360, 180)
-      const snapThreshold = 18;
-      let snapX = null;
-      let snapY = null;
-
-      if (Math.abs(angleDeg - 90) < snapThreshold) {
-        snapX = 0;
-        snapY = Math.round(linearScale * 32767);
-      } else if (Math.abs(angleDeg - 270) < snapThreshold) {
-        snapX = 0;
-        snapY = -Math.round(linearScale * 32767);
-      } else if (angleDeg < snapThreshold || angleDeg > (360 - snapThreshold)) {
-        snapX = Math.round(linearScale * 32767);
-        snapY = 0;
-      } else if (Math.abs(angleDeg - 180) < snapThreshold) {
-        snapX = -Math.round(linearScale * 32767);
-        snapY = 0;
-      }
-
-      if (snapX !== null && snapY !== null) {
-        this.stickX = snapX;
-        this.stickY = snapY;
-      } else {
-        this.stickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
-        this.stickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
-      }
+      this.stickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
+      this.stickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
     }
     this.sendInputNow();
   }
@@ -1321,7 +1598,7 @@ class GamepadClient {
       puckEl.style.transform = `translate(${localDx}px, ${localDy}px)`;
     }
 
-    const deadzone = 0.06;
+    const deadzone = 0.05;
     const normDist = Math.min(1.0, dist / maxRadius);
 
     if (normDist < deadzone) {
@@ -1332,33 +1609,8 @@ class GamepadClient {
       const cartY = -dy;
       const cartX = dx;
       const angleRad = Math.atan2(cartY, cartX);
-      const angleDeg = ((angleRad * 180 / Math.PI) + 360) % 360;
-
-      const snapThreshold = 18;
-      let snapX = null;
-      let snapY = null;
-
-      if (Math.abs(angleDeg - 90) < snapThreshold) {
-        snapX = 0;
-        snapY = Math.round(linearScale * 32767);
-      } else if (Math.abs(angleDeg - 270) < snapThreshold) {
-        snapX = 0;
-        snapY = -Math.round(linearScale * 32767);
-      } else if (angleDeg < snapThreshold || angleDeg > (360 - snapThreshold)) {
-        snapX = Math.round(linearScale * 32767);
-        snapY = 0;
-      } else if (Math.abs(angleDeg - 180) < snapThreshold) {
-        snapX = -Math.round(linearScale * 32767);
-        snapY = 0;
-      }
-
-      if (snapX !== null && snapY !== null) {
-        this.rightStickX = snapX;
-        this.rightStickY = snapY;
-      } else {
-        this.rightStickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
-        this.rightStickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
-      }
+      this.rightStickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
+      this.rightStickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
     }
     this.sendInputNow();
   }
@@ -1657,6 +1909,15 @@ class GamepadClient {
       resetBtn.addEventListener("click", (e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
         this.resetLayout1Config();
+      });
+    }
+
+    // Test Vibration & Haptics Button
+    const vibeTestBtn = document.getElementById("l1-test-vibe-btn");
+    if (vibeTestBtn) {
+      vibeTestBtn.addEventListener("click", (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        this.haptics.testHapticPulse();
       });
     }
   }

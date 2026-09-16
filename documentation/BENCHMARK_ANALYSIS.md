@@ -1,6 +1,6 @@
 # Quantitative QoS Benchmark & Network Performance Analysis
 
-**Project**: Project Controller Pro  
+**Project**: Project Controller  
 **Evaluation Module**: Quality of Service (QoS), Network Jitter & Sensor Fusion Analysis  
 **Dataset Reference**: [qos_telemetry_dataset.csv](data/qos_telemetry_dataset.csv)  
 **Associated Academic Figures**: [fig1_signal_conditioning.png](figures/fig1_signal_conditioning.png), [fig2_jitter_distribution.png](figures/fig2_jitter_distribution.png)  
@@ -9,7 +9,7 @@
 
 ## 1. Experimental Methodology & Testbed Setup
 
-To provide reproducible empirical evidence for academic viva evaluation, a high-frequency telemetry test was executed using the integrated `QoSRecorder` telemetry flight data engine.
+To provide reproducible empirical evidence for performance validation, a high-frequency telemetry test was executed using the integrated `QoSRecorder` telemetry flight data engine.
 
 ### 1.1 Testbed Hardware & Environmental Parameters
 
@@ -103,7 +103,7 @@ Packet arrival consistency is the critical parameter governing teleoperation smo
 
 ## 5. Zero-Copy 24-Byte Binary Wire Protocol Micro-Benchmark
 
-To minimize network serialization latency and bandwidth saturation on congested Wi-Fi bands, Project Controller Pro implemented an optimized 24-byte binary wire protocol (`<BBHIhhhhBBHhBB`). 
+To minimize network serialization latency and bandwidth saturation on congested Wi-Fi bands, Project Controller implemented an optimized 24-byte binary wire protocol (`<BBHIhhhhBBHhBB`). 
 
 A 50,000-cycle micro-benchmark was executed comparing JSON deserialization against native C-struct unpacking:
 
@@ -143,9 +143,9 @@ An empirical Fast Fourier Transform (FFT) was conducted over 1,024 samples ($f_s
 
 ## 7. Comparative Evaluation with Commercial Solutions
 
-To assess competitive standing, Project Controller Pro was benchmarked against leading commercial and open-source teleoperation utilities:
+To assess competitive standing, Project Controller was benchmarked against leading commercial and open-source teleoperation utilities:
 
-| Feature / Metric | Project Controller Pro | Steam Link Virtual Controller | Unified Remote Gamepad | Monect PC Remote |
+| Feature / Metric | Project Controller | Steam Link Virtual Controller | Unified Remote Gamepad | Monect PC Remote |
 | :--- | :--- | :--- | :--- | :--- |
 | **Client Installation** | **Zero Install (Web Browser)** | Heavy Native App (~150MB) | Native App (~45MB) | Native App + Adware (~60MB) |
 | **Platform Portability** | **Any Browser (iOS, Android, macOS)** | iOS / Android only | iOS / Android only | Windows / Android only |

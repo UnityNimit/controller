@@ -117,8 +117,60 @@ def get_logo_ico_path() -> Optional[Path]:
     return None
 
 
+def enable_dark_title_bar(window: Any) -> None:
+    """Enables Windows 10/11 DWM immersive dark mode for window title bar, borders, and captions."""
+    if sys.platform != "win32":
+        return
+    try:
+        window.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+        if not hwnd:
+            hwnd = window.winfo_id()
+
+        # DWMWA_USE_IMMERSIVE_DARK_MODE (20 on Win11 & Win10 20H1+, 19 on older Win10)
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
+        DWMWA_BORDER_COLOR = 34
+        DWMWA_CAPTION_COLOR = 35
+        DWMWA_TEXT_COLOR = 36
+
+        value = ctypes.c_int(2)  # 2 = TRUE
+        res = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            ctypes.byref(value),
+            ctypes.sizeof(value)
+        )
+        if res != 0:
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
+                ctypes.byref(value),
+                ctypes.sizeof(value)
+            )
+
+        # Set dark caption and border colors (#08090b -> 0x000B0908, #1c2128 -> 0x0028211C)
+        caption_color = ctypes.c_int(0x000B0908)
+        border_color = ctypes.c_int(0x0028211C)
+        text_color = ctypes.c_int(0x00FCF6F0)
+
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(caption_color), ctypes.sizeof(caption_color)
+        )
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, DWMWA_BORDER_COLOR, ctypes.byref(border_color), ctypes.sizeof(border_color)
+        )
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, DWMWA_TEXT_COLOR, ctypes.byref(text_color), ctypes.sizeof(text_color)
+        )
+    except Exception as e:
+        logger.debug(f"Dark title bar could not be set: {e}")
+
+
 def set_window_logo_icon(window: tk.Tk) -> None:
     """Sets the native OS window & taskbar icon to logo.ico and logo.png with perfection."""
+    enable_dark_title_bar(window)
+
     # 1. Native Windows Win32 iconbitmap (sets titlebar icon and taskbar icon cleanly)
     ico_p = get_logo_ico_path()
     if ico_p:
@@ -210,191 +262,474 @@ def get_bundled_driver_msi() -> Optional[Path]:
     return None
 
 
-class TermsDialog(ctk.CTkToplevel):
+class SetupWizardDialog(ctk.CTkToplevel):
     """
-    Sleek Monochrome Terms & Conditions and Community Support Modal Dialog.
-    Displays project branding, logo, terms of service, architecture summary,
-    GitHub link, and Buy Me a Coffee donation link.
+    Sleek Monochrome 5-Step Guided Setup & Compulsory Terms Acceptance Wizard.
+    Guides the user sequentially through:
+    1. Local Wi-Fi & Hotspot Configuration
+    2. ViGEmBus Xbox 360 Kernel Driver Setup
+    3. Mobile Phone Pairing & Local SSL Certificate Bypass
+    4. Motion Steering, Hair-Triggers & Button Customization
+    5. Terms of Service, Safety Disclaimers & Compulsory Agreement
     """
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("Controller // Terms & Conditions")
-        self.geometry("620x540")
-        self.minsize(540, 460)
+        self.title("Controller // Setup Guide & Terms")
+        self.geometry("680x570")
+        self.minsize(620, 480)
         self.configure(fg_color=COLOR_BG)
         self.transient(parent)
+        enable_dark_title_bar(self)
         set_window_logo_icon(self)
 
-        # Center dialog over parent
+        self.current_step: int = 0
+        self.total_steps: int = 5
+
+        # Center over parent
         try:
             self.update_idletasks()
             pw = parent.winfo_width()
             ph = parent.winfo_height()
             px = parent.winfo_x()
             py = parent.winfo_y()
-            w = 620
-            h = 540
+            w, h = 680, 570
             x = max(0, px + (pw - w) // 2)
             y = max(0, py + (ph - h) // 2)
             self.geometry(f"{w}x{h}+{x}+{y}")
         except Exception:
             pass
 
+        enable_dark_title_bar(self)
+
         # Header Container
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=20, pady=(16, 6))
+        header.pack(fill="x", padx=16, pady=(12, 2))
 
-        # Centered Logo
-        logo_img = get_logo_ctk_image((60, 60))
+        # Centered High-Contrast Obsidian Logo (Clean glyph, zero outer lines or badge border)
+        logo_img = get_logo_ctk_image((36, 36))
         if logo_img:
-            lbl_logo = ctk.CTkLabel(header, image=logo_img, text="")
-            lbl_logo.pack(pady=(0, 4))
+            lbl_logo = ctk.CTkLabel(header, image=logo_img, text="", fg_color="transparent")
+            lbl_logo.pack(pady=(0, 2))
 
         lbl_title = ctk.CTkLabel(
             header,
             text="Controller",
-            font=ctk.CTkFont(family="Consolas", size=15, weight="bold"),
+            font=ctk.CTkFont(family="Consolas", size=13, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
         lbl_title.pack()
 
-        lbl_sub = ctk.CTkLabel(
+        self.lbl_step_indicator = ctk.CTkLabel(
             header,
-            text="Ultra-Low Latency Cyber-Physical Teleoperation Framework • v1.0.0",
+            text="Step 1 of 5 • Network Configuration",
             font=ctk.CTkFont(family="Consolas", size=9),
             text_color=COLOR_TEXT_MUTED
         )
-        lbl_sub.pack(pady=(2, 0))
+        self.lbl_step_indicator.pack(pady=(1, 0))
 
-        # Scrollable Terms & Architecture Box
-        terms_box = ctk.CTkTextbox(
-            self,
+        # Step Progress Pills Tracker
+        self.tracker_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.tracker_frame.pack(fill="x", padx=16, pady=(4, 6))
+
+        self.step_buttons: List[ctk.CTkButton] = []
+        step_labels = ["1. NETWORK", "2. DRIVER", "3. PAIRING", "4. CONTROLS", "5. TERMS"]
+        for i, name in enumerate(step_labels):
+            btn = ctk.CTkButton(
+                self.tracker_frame,
+                text=name,
+                font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
+                height=22,
+                corner_radius=3,
+                command=lambda step=i: self._go_to_step(step)
+            )
+            btn.pack(side="left", fill="x", expand=True, padx=2)
+            self.step_buttons.append(btn)
+
+        # Main Step Card
+        self.card_body = ctk.CTkFrame(self, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=4)
+        self.card_body.pack(fill="both", expand=True, padx=16, pady=(0, 6))
+
+        # Text Display Box - Seamless background, no nested contrasting box
+        self.step_textbox = ctk.CTkTextbox(
+            self.card_body,
             fg_color=COLOR_CARD,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            text_color=COLOR_TEXT_SECONDARY,
-            font=ctk.CTkFont(family="Consolas", size=10),
-            corner_radius=6,
+            border_width=0,
+            text_color=COLOR_TEXT_PRIMARY,
+            font=ctk.CTkFont(family="Consolas", size=9),
             wrap="word"
         )
-        terms_box.pack(fill="both", expand=True, padx=20, pady=8)
+        self.step_textbox.pack(fill="both", expand=True, padx=14, pady=(10, 4))
 
-        terms_content = (
-            "=======================================================================\n"
-            " CONTROLLER v1.0.0 - TERMS OF USE, DISCLAIMER & ARCHITECTURE\n"
-            "=======================================================================\n\n"
-            "1. OPEN-SOURCE LICENSE & AS-IS USAGE:\n"
-            "   Controller is provided 'AS IS' without warranty of any kind,\n"
-            "   express or implied. In no event shall the author or contributors be\n"
-            "   liable for any claim, damages, hardware failures, or other liability\n"
-            "   arising from the use or misuse of this software.\n\n"
-            "2. RECREATIONAL & RESEARCH INTENT:\n"
-            "   This software is designed strictly for personal gaming, simulation\n"
-            "   teleoperation (e.g. Assetto Corsa, Rocket League, FIFA, Forza, GTA),\n"
-            "   and cyber-physical academic research. Non-commercial use only.\n\n"
-            "3. KERNEL-LEVEL VIRTUAL GAMEPAD EMULATION:\n"
-            "   Virtual Xbox 360 controller hardware interrupts are generated via the\n"
-            "   official ViGEmBus kernel driver. Administrative elevation (UAC) is\n"
-            "   requested only once during driver installation.\n\n"
-            "4. LOCAL PRIVATE NETWORK SAFETY:\n"
-            "   All teleoperation streams and sensor telemetry packets are transmitted\n"
-            "   strictly within your local private Wi-Fi network with HMAC-SHA256\n"
-            "   handshake authentication. Zero telemetric data or telemetry packets\n"
-            "   are ever collected or transmitted to external servers or cloud services.\n\n"
-            "5. HIGH-PERFORMANCE ARCHITECTURE FEATURES:\n"
-            "   - 1000Hz Peak Teleoperation Pipeline with sub-millisecond dispatch\n"
-            "   - Esports Hair-Triggers: Instant 100% actuation and strict 0.0 zero-state\n"
-            "     release with redundant UDP burst protection (no floating values)\n"
-            "   - Adaptive Menu Cadence Engine: Directional flicks (<160ms) emit a calibrated\n"
-            "     75ms impulse for crisp 1-step list navigation (FIFA, Steam, Rocket League)\n"
-            "   - Closed-Loop Bi-Directional Dual-Motor Force-Feedback Haptics\n"
-            "   - 4-Player Local Split-Screen Multiplayer with Atomic Host Slot Swapping\n\n"
-            "Thank you for playing and supporting Controller!\n"
-        )
-        terms_box.insert("1.0", terms_content)
-        terms_box.configure(state="disabled")
+        # Dynamic Action Bar inside card (Driver install)
+        self.action_bar = ctk.CTkFrame(self.card_body, fg_color="transparent")
 
-        # Links & Community Row
-        links_frame = ctk.CTkFrame(self, fg_color="transparent")
-        links_frame.pack(fill="x", padx=20, pady=(2, 6))
+        # Step 5 Compulsory Checkbox Container
+        self.step5_check_frame = ctk.CTkFrame(self.card_body, fg_color="transparent")
 
-        btn_github = ctk.CTkButton(
-            links_frame,
-            text="🐙 GITHUB REPO",
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
-            fg_color=COLOR_SURFACE,
-            hover_color=COLOR_SURFACE_HOVER,
+        self.chk_terms_compulsory = ctk.CTkCheckBox(
+            self.step5_check_frame,
+            text="I agree to the Terms of Service & Safety Guidelines (Compulsory)",
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY,
-            border_color=COLOR_CARD_BORDER,
+            fg_color=COLOR_WHITE,
+            hover_color="#30363d",
+            border_color="#484f58",
+            checkmark_color="#08090b",
+            corner_radius=2,
             border_width=1,
-            height=28,
-            command=lambda: webbrowser.open("https://github.com/UnityNimit/controller")
+            checkbox_width=16,
+            checkbox_height=16,
+            command=self._on_compulsory_toggle
         )
-        btn_github.pack(side="left", fill="x", expand=True, padx=(0, 6))
-
-        btn_coffee = ctk.CTkButton(
-            links_frame,
-            text="☕ BUY ME A COFFEE / DONATE",
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
-            fg_color=COLOR_SURFACE,
-            hover_color=COLOR_SURFACE_HOVER,
-            text_color=COLOR_TEXT_PRIMARY,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            height=28,
-            command=lambda: webbrowser.open("https://buymeacoffee.com/unitynimit")
-        )
-        btn_coffee.pack(side="right", fill="x", expand=True, padx=(6, 0))
-
-        # Bottom Bar: Do not show on startup Checkbox + Accept Button
-        bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
-        bottom_frame.pack(fill="x", padx=20, pady=(4, 16))
+        self.chk_terms_compulsory.pack(anchor="w", padx=4, pady=(2, 3))
 
         self.chk_dont_show = ctk.CTkCheckBox(
-            bottom_frame,
-            text="Do not show on startup",
-            font=ctk.CTkFont(family="Consolas", size=9),
+            self.step5_check_frame,
+            text="Do not show this setup guide automatically on startup",
+            font=ctk.CTkFont(family="Consolas", size=8),
             text_color=COLOR_TEXT_MUTED,
-            fg_color="#30363d",
-            hover_color="#484f58",
-            border_color=COLOR_CARD_BORDER,
-            checkmark_color="#ffffff"
+            fg_color=COLOR_WHITE,
+            hover_color="#21262d",
+            border_color="#30363d",
+            checkmark_color="#08090b",
+            corner_radius=2,
+            border_width=1,
+            checkbox_width=14,
+            checkbox_height=14
         )
-        self.chk_dont_show.pack(side="left")
+        self.chk_dont_show.pack(anchor="w", padx=4, pady=(0, 2))
 
-        btn_accept = ctk.CTkButton(
-            bottom_frame,
-            text="ACCEPT & CONTINUE",
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
-            fg_color="#f0f6fc",
-            hover_color="#ffffff",
+        # Bottom Navigation Row: [PREVIOUS] ... [GITHUB / DONATE] ... [NEXT / ACCEPT & LAUNCH]
+        self.bottom_bar = ctk.CTkFrame(self, fg_color="transparent")
+        self.bottom_bar.pack(fill="x", padx=16, pady=(4, 12))
+
+        self.btn_prev = ctk.CTkButton(
+            self.bottom_bar,
+            text="PREVIOUS",
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+            fg_color=COLOR_SURFACE,
+            hover_color=COLOR_SURFACE_HOVER,
+            text_color=COLOR_TEXT_PRIMARY,
+            height=28,
+            width=130,
+            corner_radius=3,
+            command=self._prev_step
+        )
+        self.btn_prev.pack(side="left")
+
+        # Center Action Links (GitHub & Donate)
+        self.center_links_frame = ctk.CTkFrame(self.bottom_bar, fg_color="transparent")
+
+        self.btn_gh = ctk.CTkButton(
+            self.center_links_frame,
+            text="GITHUB",
+            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
+            fg_color=COLOR_SURFACE,
+            hover_color=COLOR_SURFACE_HOVER,
+            text_color=COLOR_TEXT_PRIMARY,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            height=28,
+            width=80,
+            corner_radius=3,
+            command=lambda: webbrowser.open("https://github.com/UnityNimit/controller")
+        )
+        self.btn_gh.pack(side="left", padx=2)
+
+        self.btn_coffee = ctk.CTkButton(
+            self.center_links_frame,
+            text="DONATE",
+            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
+            fg_color=COLOR_SURFACE,
+            hover_color=COLOR_SURFACE_HOVER,
+            text_color=COLOR_TEXT_PRIMARY,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            height=28,
+            width=80,
+            corner_radius=3,
+            command=lambda: webbrowser.open("https://buymeacoffee.com/unitynimit")
+        )
+        self.btn_coffee.pack(side="left", padx=2)
+
+        # Right Action Buttons - Both strictly share identical dimensions (130x28)
+        self.btn_next = ctk.CTkButton(
+            self.bottom_bar,
+            text="NEXT",
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+            fg_color=COLOR_WHITE,
+            hover_color=COLOR_SILVER,
             text_color="#08090b",
-            height=30,
-            width=160,
-            corner_radius=4,
+            height=28,
+            width=130,
+            corner_radius=3,
+            command=self._next_step
+        )
+        self.btn_next.pack(side="right")
+
+        self.btn_accept_launch = ctk.CTkButton(
+            self.bottom_bar,
+            text="ACCEPT & LAUNCH",
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+            fg_color="#161b22",
+            hover_color="#161b22",
+            text_color=COLOR_TEXT_MUTED,
+            height=28,
+            width=130,
+            corner_radius=3,
+            state="disabled",
             command=self._on_accept
         )
-        btn_accept.pack(side="right")
 
+        self._render_step(0)
         self.grab_set()
 
+    def _render_step(self, step_idx: int) -> None:
+        self.current_step = step_idx
+        for i, btn in enumerate(self.step_buttons):
+            if i == step_idx:
+                btn.configure(fg_color=COLOR_WHITE, hover_color=COLOR_SILVER, text_color="#08090b")
+            elif i < step_idx:
+                btn.configure(fg_color="#21262d", hover_color=COLOR_SURFACE_HOVER, text_color=COLOR_TEXT_PRIMARY)
+            else:
+                btn.configure(fg_color=COLOR_SURFACE, hover_color=COLOR_SURFACE_HOVER, text_color=COLOR_TEXT_MUTED)
+
+        # Clear dynamic action frame
+        for child in self.action_bar.winfo_children():
+            child.destroy()
+
+        # Update step text content
+        self.step_textbox.configure(state="normal")
+        self.step_textbox.delete("1.0", "end")
+
+        if step_idx == 0:
+            self.lbl_step_indicator.configure(text="Step 1 of 5 • Network Configuration")
+            content = (
+                "========================================================================================\n"
+                " STEP 1 OF 5 // LOCAL NETWORK & WI-FI CONFIGURATION\n"
+                "========================================================================================\n\n"
+                "1. SAME LOCAL WI-FI NETWORK:\n"
+                "   • Connect your smartphone and PC to the same local Wi-Fi router (2.4GHz or 5GHz).\n\n"
+                "2. LOWEST LATENCY RECOMMENDATION (< 2ms):\n"
+                "   • Turn on your smartphone's Mobile Hotspot (or Windows Mobile Hotspot).\n"
+                "   • Connect your PC directly to the phone's Wi-Fi hotspot.\n"
+                "   • Direct device-to-device wireless routing eliminates router queue latency,\n"
+                "     achieving sub-2ms transmission speeds.\n\n"
+                "3. WINDOWS DEFENDER FIREWALL:\n"
+                "   • The Controller Gateway listens on port 8443 (WSS / HTTPS).\n"
+                "   • If your smartphone fails to connect, allow Python through Windows Defender Firewall\n"
+                "     on Private Networks.\n\n"
+                "Click 'NEXT' to proceed to the virtual gamepad driver setup.\n"
+            )
+            self.step_textbox.insert("1.0", content)
+
+        elif step_idx == 1:
+            self.lbl_step_indicator.configure(text="Step 2 of 5 • ViGEmBus Xbox 360 Kernel Driver")
+            content = (
+                "========================================================================================\n"
+                " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER SETUP\n"
+                "========================================================================================\n\n"
+                "1. GENUINE XINPUT GAMEPAD EMULATION:\n"
+                "   • Controller creates official, zero-latency virtual Xbox 360 gamepads using the\n"
+                "     open-source ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver.\n"
+                "   • All PC games (Assetto Corsa, Rocket League, Forza Horizon, FIFA, GTA, BeamNG, Steam)\n"
+                "     recognize your smartphone as an authentic physical Xbox 360 controller.\n\n"
+                "2. ONE-CLICK DRIVER INSTALLATION:\n"
+                "   • Click 'INSTALL VIGEMBUS DRIVER' below to install the official signed driver.\n"
+                "   • Accept the Windows Administrator UAC prompt to complete driver registration.\n"
+                "   • Once installed, virtual gamepads are immediately active with no PC reboot required.\n\n"
+                "3. KEYBOARD FALLBACK MODE:\n"
+                "   • If omitted, Controller operates in keyboard fallback mode (WASD, Arrow keys,\n"
+                "     Spacebar, Shift) so you can still play right away.\n\n"
+                "Click 'NEXT' to learn how to pair your phone and bypass local browser SSL certificates.\n"
+            )
+            self.step_textbox.insert("1.0", content)
+
+            btn_drv = ctk.CTkButton(
+                self.action_bar,
+                text="INSTALL VIGEMBUS DRIVER",
+                font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+                fg_color=COLOR_SURFACE,
+                hover_color=COLOR_SURFACE_HOVER,
+                text_color=COLOR_TEXT_PRIMARY,
+                border_color=COLOR_CARD_BORDER,
+                border_width=1,
+                height=26,
+                corner_radius=3,
+                command=self._install_driver_wizard
+            )
+            btn_drv.pack(fill="x", padx=4)
+
+        elif step_idx == 2:
+            self.lbl_step_indicator.configure(text="Step 3 of 5 • Smartphone Pairing & Local SSL Bypass")
+            content = (
+                "========================================================================================\n"
+                " STEP 3 OF 5 // SMARTPHONE PAIRING & LOCAL SSL CERTIFICATE BYPASS\n"
+                "========================================================================================\n\n"
+                "1. INSTANT CAMERA PAIRING:\n"
+                "   • Point your phone's Camera at the QR code on the left sidebar, or open\n"
+                "     https://<YOUR_PC_IP>:8443 in your mobile browser.\n\n"
+                "2. LOCAL PRIVATE SSL CERTIFICATE BYPASS (ONCE PER DEVICE):\n"
+                "   • Because Controller uses encrypted WebSockets (WSS) on your private network without\n"
+                "     a public domain, mobile browsers display a standard self-signed certificate notice:\n\n"
+                "   -> Apple iOS Safari:\n"
+                "      1. Tap 'Show Details' at the bottom.\n"
+                "      2. Tap 'visit this website'.\n"
+                "      3. Tap 'Visit Website' on the confirmation prompt.\n\n"
+                "   -> Google Android Chrome / Brave / Edge:\n"
+                "      1. Tap 'Advanced' (or 'Details').\n"
+                "      2. Tap 'Proceed to <IP> (unsafe)'.\n\n"
+                "3. ROTATE TO LANDSCAPE:\n"
+                "   • Rotate your phone to landscape mode to automatically open the cockpit controls.\n\n"
+                "Click 'NEXT' to review control layouts, steering gyroscope, and customization.\n"
+            )
+            self.step_textbox.insert("1.0", content)
+
+        elif step_idx == 3:
+            self.lbl_step_indicator.configure(text="Step 4 of 5 • Controls, 6-DoF Gyro & Customization")
+            content = (
+                "========================================================================================\n"
+                " STEP 4 OF 5 // CONTROLS, 6-DoF GYROSCOPE & CUSTOMIZATION\n"
+                "========================================================================================\n\n"
+                "1. DUAL RACING & ESPORTS LAYOUTS:\n"
+                "   • Layout 1 (Formula Steering Wheel):\n"
+                "     - 6-DoF Gyroscopic motion steering with discrete Kalman filtering.\n"
+                "     - Hair-trigger Throttle (RT) and Brake (LT) with progressive touch pressure.\n"
+                "     - Digital Bumpers (LB, RB), Handbrake, and Nitro buttons.\n"
+                "   • Layout 2 (Esports Dual-Stick Gamepad):\n"
+                "     - Left & Right analog sticks, D-Pad, ABXY diamond, and shoulder triggers.\n\n"
+                "2. GYROSCOPE STEERING CALIBRATION:\n"
+                "   • Center Horizon Indicator: Tap to toggle motion steering on or off.\n"
+                "   • Hold phone in your preferred driving position and tap 'CALIBRATE' to re-zero angle.\n\n"
+                "3. FULL CUSTOMIZATION & DRAG-TO-RESIZE:\n"
+                "   • Tap the Settings icon on your phone screen to enter Edit Mode.\n"
+                "   • Drag any button to place it anywhere on screen.\n"
+                "   • Drag corner handles to resize buttons or joystick radius.\n"
+                "   • Tap 'Save' when finished to persist your layout.\n\n"
+                "Click 'NEXT' to review terms of service and launch the dashboard.\n"
+            )
+            self.step_textbox.insert("1.0", content)
+
+        elif step_idx == 4:
+            self.lbl_step_indicator.configure(text="Step 5 of 5 • Terms of Service & Compulsory Agreement")
+            content = (
+                "========================================================================================\n"
+                " STEP 5 OF 5 // TERMS OF SERVICE, SAFETY GUIDELINES & ACCEPTANCE\n"
+                "========================================================================================\n\n"
+                "1. OPEN-SOURCE MIT LICENSE & AS-IS USAGE:\n"
+                "   Controller is provided 'AS IS' without warranty of any kind, express or implied.\n"
+                "   In no event shall the author or contributors be liable for any claim, damages,\n"
+                "   hardware failures, or liabilities arising from the use or misuse of this software.\n\n"
+                "2. RECREATIONAL & GAMING INTENT ONLY:\n"
+                "   This software is designed exclusively for personal video games and simulation software\n"
+                "   (e.g., Assetto Corsa, Forza Horizon, Rocket League, FIFA, Skate, GTA, BeamNG).\n"
+                "   SAFETY WARNING: Do NOT use this software to operate real-world vehicles or heavy machinery.\n\n"
+                "3. LOCAL PRIVATE ENCRYPTION & PRIVACY GUARANTEE:\n"
+                "   All controller inputs, motion sensors, and haptic feedback packets operate strictly\n"
+                "   within your local private home network using HMAC-SHA256 authenticated WebSockets.\n"
+                "   ZERO telemetry or personal data is collected or transmitted to external servers.\n\n"
+                "4. MULTIPLAYER & SLOT SWAPPING:\n"
+                "   Up to 4 players can connect simultaneously. The first connected phone always claims Player 1.\n"
+                "   Use the 'SWAP' buttons on the dashboard anytime to swap player order.\n\n"
+                "5. COMPULSORY ACCEPTANCE:\n"
+                "   Please check the agreement box below to accept these terms and unlock the dashboard.\n"
+            )
+            self.step_textbox.insert("1.0", content)
+
+        self.step_textbox.configure(state="disabled")
+
+        # Configure Prev Button
+        if step_idx == 0:
+            self.btn_prev.configure(state="disabled", text_color=COLOR_TEXT_DIM)
+        else:
+            self.btn_prev.configure(state="normal", text_color=COLOR_TEXT_PRIMARY)
+
+        # Configure Action Bar, Checkboxes, and Next/Accept Buttons
+        if step_idx == 1:
+            self.action_bar.pack(fill="x", padx=14, pady=(0, 8))
+        else:
+            self.action_bar.pack_forget()
+
+        if step_idx < 4:
+            self.step5_check_frame.pack_forget()
+            self.center_links_frame.pack_forget()
+            self.btn_accept_launch.pack_forget()
+            self.btn_next.pack(side="right")
+        else:
+            self.step5_check_frame.pack(fill="x", padx=14, pady=(0, 8))
+            self.center_links_frame.pack(side="left", padx=12)
+            self.btn_next.pack_forget()
+            self.btn_accept_launch.pack(side="right")
+            self._on_compulsory_toggle()
+
+    def _on_compulsory_toggle(self) -> None:
+        if bool(self.chk_terms_compulsory.get()):
+            self.btn_accept_launch.configure(
+                state="normal",
+                fg_color=COLOR_WHITE,
+                hover_color=COLOR_SILVER,
+                text_color="#08090b"
+            )
+        else:
+            self.btn_accept_launch.configure(
+                state="disabled",
+                fg_color="#161b22",
+                hover_color="#161b22",
+                text_color=COLOR_TEXT_MUTED
+            )
+
+    def _next_step(self) -> None:
+        if self.current_step < 4:
+            self._render_step(self.current_step + 1)
+
+    def _prev_step(self) -> None:
+        if self.current_step > 0:
+            self._render_step(self.current_step - 1)
+
+    def _go_to_step(self, step: int) -> None:
+        if 0 <= step < self.total_steps:
+            self._render_step(step)
+
+    def _install_driver_wizard(self) -> None:
+        import tempfile, shutil, subprocess, threading
+        def _worker():
+            msi_path = get_bundled_driver_msi()
+            if not msi_path:
+                return
+            try:
+                temp_dir = tempfile.gettempdir()
+                dest_msi = os.path.join(temp_dir, "ViGEmBusSetup_x64.msi")
+                if str(msi_path) != dest_msi:
+                    shutil.copy2(str(msi_path), dest_msi)
+                cmd = f'Start-Process msiexec.exe -ArgumentList \'/i "{dest_msi}" /passive /norestart\' -Verb RunAs -Wait'
+                subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd], capture_output=True, timeout=120)
+            except Exception:
+                pass
+        threading.Thread(target=_worker, daemon=True).start()
+
     def _on_accept(self) -> None:
+        if not bool(self.chk_terms_compulsory.get()):
+            return
         dont_show = bool(self.chk_dont_show.get())
         save_terms_preference(dont_show)
         self.grab_release()
         self.destroy()
 
 
-class VivaDefenseDialog(ctk.CTkToplevel):
+# Compatibility alias
+TermsDialog = SetupWizardDialog
+
+
+class SystemBenchmarkDialog(ctk.CTkToplevel):
     """
-    Academic Viva Defense & Real-Time Telemetry Benchmark Suite Modal.
+    Real-Time Telemetry & Hardware Signal Diagnostics Benchmark Suite Modal.
     Demonstrates discrete state-space Kalman filter formulation,
-    zero-copy 24-byte wire protocol benchmarks, and FFT spectral noise rejection.
+    zero-copy 24-byte wire protocol micro-benchmarks, and FFT spectral noise rejection.
     """
     def __init__(self, parent, bridge: TelemetryBridge):
         super().__init__(parent)
         self.bridge = bridge
-        self.title("Controller // Academic Viva Defense & Benchmark Suite")
+        self.title("Controller // Performance Benchmark & Signal Diagnostics")
         self.geometry("840x660")
         self.minsize(720, 560)
         self.configure(fg_color=COLOR_BG)
@@ -419,9 +754,9 @@ class VivaDefenseDialog(ctk.CTkToplevel):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=(14, 4))
 
-        logo_img = get_logo_ctk_image((48, 48))
+        logo_img = get_logo_ctk_image((44, 44))
         if logo_img:
-            lbl_logo = ctk.CTkLabel(header, image=logo_img, text="")
+            lbl_logo = ctk.CTkLabel(header, image=logo_img, text="", fg_color="transparent")
             lbl_logo.pack(side="left", padx=(0, 12))
 
         header_text = ctk.CTkFrame(header, fg_color="transparent")
@@ -429,7 +764,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
         lbl_title = ctk.CTkLabel(
             header_text,
-            text="PROJECT CONTROLLER PRO // SEMESTER 5 CAPSTONE VIVA SUITE",
+            text="PROJECT CONTROLLER // PERFORMANCE BENCHMARK & HARDWARE DIAGNOSTICS",
             font=ctk.CTkFont(family="Consolas", size=13, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY,
             anchor="w"
@@ -457,7 +792,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
         )
         self.tabview.pack(fill="both", expand=True, padx=20, pady=8)
 
-        tab_math = self.tabview.add("MATHEMATICAL PROOFS")
+        tab_math = self.tabview.add("MATHEMATICAL FORMULATION")
         tab_bench = self.tabview.add("LIVE SYSTEM BENCHMARK")
         tab_fft = self.tabview.add("SPECTRAL FFT & DSP")
 
@@ -471,7 +806,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
         btn_cli = ctk.CTkButton(
             bottom_frame,
-            text="⚡ LAUNCH STANDALONE CLI VIVA SUITE",
+            text="LAUNCH BENCHMARK SUITE",
             font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
@@ -485,7 +820,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
         btn_export = ctk.CTkButton(
             bottom_frame,
-            text="📄 EXPORT VIVA REPORT (MD)",
+            text="EXPORT PERFORMANCE REPORT (MD)",
             font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
@@ -493,7 +828,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
             border_color=COLOR_CARD_BORDER,
             border_width=1,
             height=30,
-            command=self._export_viva_report
+            command=self._export_performance_report
         )
         btn_export.pack(side="left", padx=6)
 
@@ -561,7 +896,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
         self.btn_run_bench = ctk.CTkButton(
             bench_ctrl,
-            text="▶ RUN LIVE MICRO-BENCHMARK (20,000 CYCLES)",
+            text="RUN LIVE MICRO-BENCHMARK (20,000 CYCLES)",
             font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
             fg_color=COLOR_WHITE,
             hover_color=COLOR_SILVER,
@@ -573,7 +908,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
         self.lbl_bench_status = ctk.CTkLabel(
             bench_ctrl,
-            text="Ready. Click button to execute live test in front of examiners.",
+            text="Ready. Click button to execute live hardware benchmark.",
             font=ctk.CTkFont(family="Consolas", size=9),
             text_color=COLOR_TEXT_MUTED
         )
@@ -592,7 +927,7 @@ class VivaDefenseDialog(ctk.CTkToplevel):
         self.bench_box.pack(fill="both", expand=True, padx=4, pady=4)
         init_text = (
             "========================================================================================\n"
-            " CONTROLLER PRO // WIRE PROTOCOL & DSP BENCHMARK READOUT\n"
+            " CONTROLLER // WIRE PROTOCOL & DSP BENCHMARK READOUT\n"
             "========================================================================================\n"
             " Click 'RUN LIVE MICRO-BENCHMARK' above to benchmark:\n"
             " 1. 24-Byte Zero-Copy Binary Micro-Packet Wire Protocol vs JSON (20,000 packets)\n"
@@ -718,25 +1053,29 @@ class VivaDefenseDialog(ctk.CTkToplevel):
 
     def _launch_cli_suite(self):
         try:
-            script = Path.cwd() / "scripts" / "viva_defense_suite.py"
-            if script.exists():
+            candidates = [
+                Path.cwd() / "scripts" / "benchmark_suite.py",
+                Path.cwd() / "scripts" / "viva_defense_suite.py"
+            ]
+            script = next((p for p in candidates if p.exists()), None)
+            if script:
                 subprocess.Popen(
                     [sys.executable, str(script)],
                     creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
                 )
             else:
-                self.lbl_bench_status.configure(text="scripts/viva_defense_suite.py not found.")
+                self.lbl_bench_status.configure(text="scripts/benchmark_suite.py not found.")
         except Exception as e:
             self.lbl_bench_status.configure(text=f"Launch error: {e}")
 
-    def _export_viva_report(self):
+    def _export_performance_report(self):
         try:
             doc_dir = Path.cwd() / "documentation"
             doc_dir.mkdir(parents=True, exist_ok=True)
-            report_file = doc_dir / "VIVA_DEFENSE_REPORT.md"
+            report_file = doc_dir / "PERFORMANCE_REPORT.md"
             report_content = (
-                "# CONTROLLER PRO // SEMESTER 5 CAPSTONE VIVA DEFENSE DOSSIER\n\n"
-                "**Student / Author**: Unity Nimit\n"
+                "# CONTROLLER // PERFORMANCE BENCHMARK & HARDWARE DIAGNOSTICS REPORT\n\n"
+                "**Author / Maintainer**: Unity Nimit\n"
                 f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "**Architecture**: Zero-Copy 24B Binary Protocol & Aerospace Discrete State-Space Kalman Filtering\n\n"
                 "## 1. Mathematical Formulation\n\n"
@@ -757,41 +1096,50 @@ class VivaDefenseDialog(ctk.CTkToplevel):
         except Exception as e:
             self.lbl_bench_status.configure(text=f"Export failed: {e}")
 
+    _export_viva_report = _export_performance_report
+
+
+# Backwards compatibility alias
+VivaDefenseDialog = SystemBenchmarkDialog
+
 
 class MinimalOscilloscope(ctk.CTkFrame):
     """
     High-Performance Continuous-Sweep Oscilloscope.
-    Always rolls continuously at 50-60 FPS, with cached coords() updates.
+    Dynamically fills available container height with cached coords() updates and auto-resizing grid.
     """
     def __init__(
         self,
         master,
         title: str,
         unit: str = "ms",
-        height: int = 115,
+        height: int = 50,
         min_val: float = 0.0,
         max_val: float = 50.0,
         grid_steps: int = 3,
         traces: Optional[List[Dict[str, Any]]] = None,
         **kwargs
     ):
-        super().__init__(master, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=6, **kwargs)
+        super().__init__(master, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=5, **kwargs)
         self.title = title
         self.unit = unit
+        self.canvas_width = 300
         self.canvas_height = height
+        self._last_grid_w = 0
+        self._last_grid_h = 0
         self.min_val = min_val
         self.max_val = max_val
         self.grid_steps = grid_steps
         self._last_readout: str = ""
 
         # Top Bar: Title & Value Readout
-        self.top_bar = ctk.CTkFrame(self, fg_color="transparent", height=24)
-        self.top_bar.pack(fill="x", padx=10, pady=(4, 0))
+        self.top_bar = ctk.CTkFrame(self, fg_color="transparent", height=18)
+        self.top_bar.pack(fill="x", padx=8, pady=(2, 0))
 
         self.lbl_title = ctk.CTkLabel(
             self.top_bar,
             text=self.title.upper(),
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             text_color=COLOR_TEXT_SECONDARY
         )
         self.lbl_title.pack(side="left")
@@ -799,7 +1147,7 @@ class MinimalOscilloscope(ctk.CTkFrame):
         self.lbl_value = ctk.CTkLabel(
             self.top_bar,
             text=f"-- {self.unit}",
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             text_color=COLOR_WHITE
         )
         self.lbl_value.pack(side="right")
@@ -812,31 +1160,43 @@ class MinimalOscilloscope(ctk.CTkFrame):
             highlightthickness=0,
             bd=0
         )
-        self.canvas.pack(fill="both", expand=True, padx=6, pady=(0, 4))
+        self.canvas.pack(fill="both", expand=True, padx=4, pady=(0, 2))
 
         self.trace_configs = traces or [{"name": "default", "color": COLOR_WHITE, "min": min_val, "max": max_val}]
         self.trace_lines: Dict[str, int] = {}
 
-        self._init_grid()
         self._init_traces()
+        self.canvas.bind("<Configure>", self._on_canvas_resize)
 
-    def _init_grid(self) -> None:
-        h = self.canvas_height
+    def _on_canvas_resize(self, event) -> None:
+        if event.height > 15 and event.width > 30:
+            self.canvas_width = event.width
+            self.canvas_height = event.height
+            if abs(event.width - self._last_grid_w) > 4 or abs(event.height - self._last_grid_h) > 4:
+                self._last_grid_w = event.width
+                self._last_grid_h = event.height
+                self._redraw_grid(event.width, event.height)
+
+    def _redraw_grid(self, w: int, h: int) -> None:
+        self.canvas.delete("grid_elem")
         for i in range(1, self.grid_steps):
             y = int(h * (i / self.grid_steps))
-            self.canvas.create_line(0, y, 2000, y, fill="#12151b", dash=(2, 4), width=1)
+            self.canvas.create_line(0, y, w + 100, y, fill="#12151b", dash=(2, 4), width=1, tags="grid_elem")
             val = self.max_val - (i / self.grid_steps) * (self.max_val - self.min_val)
-            self.canvas.create_text(16, y - 5, text=f"{val:.0f}", fill="#383f4f", font=("Consolas", 7))
+            self.canvas.create_text(16, y - 5, text=f"{val:.0f}", fill="#383f4f", font=("Consolas", 7), tags="grid_elem")
 
         if self.min_val < 0 < self.max_val:
             mid_y = int(h * (self.max_val / (self.max_val - self.min_val)))
-            self.canvas.create_line(0, mid_y, 2000, mid_y, fill="#1c2128", width=1)
+            self.canvas.create_line(0, mid_y, w + 100, mid_y, fill="#1c2128", width=1, tags="grid_elem")
+
+        # Keep traces above grid
+        self.canvas.tag_raise("trace_line")
 
     def _init_traces(self) -> None:
         for cfg in self.trace_configs:
             name = cfg["name"]
             color = cfg.get("color", COLOR_WHITE)
-            line_id = self.canvas.create_line(0, self.canvas_height // 2, 0, self.canvas_height // 2, fill=color, width=2)
+            line_id = self.canvas.create_line(0, self.canvas_height // 2, 0, self.canvas_height // 2, fill=color, width=2, tags="trace_line")
             self.trace_lines[name] = line_id
 
     def update_trace(self, name: str, data_points: List[Tuple[float, float]], current_val: Optional[float] = None) -> None:
@@ -849,12 +1209,8 @@ class MinimalOscilloscope(ctk.CTkFrame):
         max_v = cfg.get("max", self.max_val) if cfg else self.max_val
         v_span = (max_v - min_v) if max_v > min_v else 1.0
 
-        w = self.canvas.winfo_width()
-        if w < 50:
-            w = 500
-        h = self.canvas.winfo_height()
-        if h < 30:
-            h = self.canvas_height
+        w = self.canvas_width
+        h = self.canvas_height
 
         pts = []
         count = len(data_points)
@@ -872,9 +1228,12 @@ class MinimalOscilloscope(ctk.CTkFrame):
 
         if current_val is not None:
             new_text = f"{current_val:.1f} {self.unit}"
-            if new_text != self._last_readout:
-                self._last_readout = new_text
-                self.lbl_value.configure(text=new_text, text_color=COLOR_TEXT_PRIMARY)
+        else:
+            new_text = f"-- {self.unit}"
+
+        if new_text != self._last_readout:
+            self._last_readout = new_text
+            self.lbl_value.configure(text=new_text, text_color=COLOR_TEXT_PRIMARY if current_val is not None else COLOR_TEXT_MUTED)
 
 
 class MinimalStickRadar(ctk.CTkFrame):
@@ -905,6 +1264,8 @@ class MinimalStickRadar(ctk.CTkFrame):
 
         self.vec_line = self.canvas.create_line(c, c, c, c, fill=self.player_color, width=2)
         self.dot = self.canvas.create_oval(c - 2, c - 2, c + 2, c + 2, fill=self.player_color, outline="")
+        self._last_tx = c
+        self._last_ty = c
 
     def set_position(self, raw_x: int, raw_y: int) -> None:
         c = self.center
@@ -914,51 +1275,112 @@ class MinimalStickRadar(ctk.CTkFrame):
 
         tx = int(c + (norm_x * r))
         ty = int(c + (norm_y * r))
-        self.canvas.coords(self.vec_line, c, c, tx, ty)
-        self.canvas.coords(self.dot, tx - 2, ty - 2, tx + 2, ty + 2)
+        if tx != self._last_tx or ty != self._last_ty:
+            self._last_tx = tx
+            self._last_ty = ty
+            self.canvas.coords(self.vec_line, c, c, tx, ty)
+            self.canvas.coords(self.dot, tx - 2, ty - 2, tx + 2, ty + 2)
 
 
-class MinimalTriggerMeter(ctk.CTkFrame):
-    """Vertical Bars for LT (Brake) and RT (Throttle)."""
-    def __init__(self, master, width: int = 28, height: int = 48, **kwargs):
+class MinimalShoulderCluster(ctk.CTkFrame):
+    """
+    Precision Shoulder & Trigger Visualizer for LB, LT (Brake), RB, RT (Throttle).
+    Combines digital bumper status, digital trigger indicators, and analog fill meters.
+    """
+    def __init__(self, master, width: int = 54, height: int = 38, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
-        self.meter_width = width
-        self.meter_height = height
+        self.w = width
+        self.h = height
 
         self.canvas = tk.Canvas(
             self,
-            width=self.meter_width,
-            height=self.meter_height,
+            width=self.w,
+            height=self.h,
             bg="#050608",
             highlightthickness=0,
             bd=0
         )
         self.canvas.pack()
 
-        bar_w = 8
-        lt_x = 3
-        rt_x = 15
-        top_y = 3
-        bot_y = self.meter_height - 11
+        # Left Shoulder (LB & LT)
+        # LB Box: (2, 2) to (21, 15)
+        self.lb_box = self.canvas.create_rectangle(2, 2, 21, 15, fill="#12151b", outline="#21262d")
+        self.lb_text = self.canvas.create_text(11, 8, text="LB", fill="#555d6e", font=("Consolas", 6, "bold"))
 
-        self.canvas.create_rectangle(lt_x, top_y, lt_x + bar_w, bot_y, fill="#0e1117", outline="#21262d")
-        self.canvas.create_rectangle(rt_x, top_y, rt_x + bar_w, bot_y, fill="#0e1117", outline="#21262d")
-        self.canvas.create_text(lt_x + bar_w // 2, bot_y + 6, text="L", fill=COLOR_TEXT_MUTED, font=("Consolas", 6, "bold"))
-        self.canvas.create_text(rt_x + bar_w // 2, bot_y + 6, text="R", fill=COLOR_TEXT_MUTED, font=("Consolas", 6, "bold"))
+        # LT Box: (2, 17) to (21, 30)
+        self.lt_box = self.canvas.create_rectangle(2, 17, 21, 30, fill="#12151b", outline="#21262d")
+        self.lt_text = self.canvas.create_text(11, 23, text="LT", fill="#555d6e", font=("Consolas", 6, "bold"))
 
-        self.bar_h = bot_y - top_y
-        self.bot_y = bot_y
-        self.lt_fill = self.canvas.create_rectangle(lt_x, bot_y, lt_x + bar_w, bot_y, fill=COLOR_WHITE, outline="")
-        self.rt_fill = self.canvas.create_rectangle(rt_x, bot_y, rt_x + bar_w, bot_y, fill=COLOR_SILVER, outline="")
+        # LT Analog Meter Bar: (23, 2) to (26, 30) (height = 28)
+        self.lt_bar_bg = self.canvas.create_rectangle(23, 2, 26, 30, fill="#0e1117", outline="#21262d")
+        self.lt_fill = self.canvas.create_rectangle(23, 30, 26, 30, fill=COLOR_WHITE, outline="")
+
+        # Right Shoulder (RB & RT)
+        # RB Box: (28, 2) to (47, 15)
+        self.rb_box = self.canvas.create_rectangle(28, 2, 47, 15, fill="#12151b", outline="#21262d")
+        self.rb_text = self.canvas.create_text(37, 8, text="RB", fill="#555d6e", font=("Consolas", 6, "bold"))
+
+        # RT Box: (28, 17) to (47, 30)
+        self.rt_box = self.canvas.create_rectangle(28, 17, 47, 30, fill="#12151b", outline="#21262d")
+        self.rt_text = self.canvas.create_text(37, 23, text="RT", fill="#555d6e", font=("Consolas", 6, "bold"))
+
+        # RT Analog Meter Bar: (49, 2) to (52, 30) (height = 28)
+        self.rt_bar_bg = self.canvas.create_rectangle(49, 2, 52, 30, fill="#0e1117", outline="#21262d")
+        self.rt_fill = self.canvas.create_rectangle(49, 30, 52, 30, fill=COLOR_SILVER, outline="")
+
+        self.bar_top = 2
+        self.bar_bot = 30
+        self.bar_span = 28
+        self._lb_on = False
+        self._rb_on = False
+        self._lt_on = False
+        self._rt_on = False
+        self._last_lt_h = -1
+        self._last_rt_h = -1
+
+    def update_shoulders(self, buttons: Dict[str, bool], throttle: int, brake: int) -> None:
+        lb_val = bool(buttons.get("LB", False))
+        rb_val = bool(buttons.get("RB", False))
+        lt_val = bool(buttons.get("LT", False)) or (brake > 8)
+        rt_val = bool(buttons.get("RT", False)) or (throttle > 8)
+
+        if lb_val != self._lb_on:
+            self._lb_on = lb_val
+            self.canvas.itemconfig(self.lb_box, fill=COLOR_WHITE if lb_val else "#12151b")
+            self.canvas.itemconfig(self.lb_text, fill="#08090b" if lb_val else "#555d6e")
+
+        if rb_val != self._rb_on:
+            self._rb_on = rb_val
+            self.canvas.itemconfig(self.rb_box, fill=COLOR_WHITE if rb_val else "#12151b")
+            self.canvas.itemconfig(self.rb_text, fill="#08090b" if rb_val else "#555d6e")
+
+        if lt_val != self._lt_on:
+            self._lt_on = lt_val
+            self.canvas.itemconfig(self.lt_box, fill=COLOR_WHITE if lt_val else "#12151b")
+            self.canvas.itemconfig(self.lt_text, fill="#08090b" if lt_val else "#555d6e")
+
+        if rt_val != self._rt_on:
+            self._rt_on = rt_val
+            self.canvas.itemconfig(self.rt_box, fill=COLOR_WHITE if rt_val else "#12151b")
+            self.canvas.itemconfig(self.rt_text, fill="#08090b" if rt_val else "#555d6e")
+
+        # Update analog fill coordinates only if changed
+        br_norm = max(0.0, min(1.0, brake / 255.0))
+        th_norm = max(0.0, min(1.0, throttle / 255.0))
+        lt_h = int(br_norm * self.bar_span)
+        rt_h = int(th_norm * self.bar_span)
+        if lt_h != self._last_lt_h:
+            self._last_lt_h = lt_h
+            self.canvas.coords(self.lt_fill, 23, self.bar_bot - lt_h, 26, self.bar_bot)
+        if rt_h != self._last_rt_h:
+            self._last_rt_h = rt_h
+            self.canvas.coords(self.rt_fill, 49, self.bar_bot - rt_h, 52, self.bar_bot)
 
     def set_triggers(self, throttle: int, brake: int) -> None:
-        th_norm = max(0.0, min(1.0, throttle / 255.0))
-        br_norm = max(0.0, min(1.0, brake / 255.0))
+        self.update_shoulders({}, throttle, brake)
 
-        lt_h = int(br_norm * self.bar_h)
-        rt_h = int(th_norm * self.bar_h)
-        self.canvas.coords(self.lt_fill, 3, self.bot_y - lt_h, 3 + 8, self.bot_y)
-        self.canvas.coords(self.rt_fill, 15, self.bot_y - rt_h, 15 + 8, self.bot_y)
+
+MinimalTriggerMeter = MinimalShoulderCluster
 
 
 class MinimalButtonCluster(ctk.CTkFrame):
@@ -1035,6 +1457,9 @@ class PlayerDeckCard(ctk.CTkFrame):
 
         self._last_connected: Optional[bool] = None
         self._last_meta_str: str = ""
+        self._last_pct_l: int = -1
+        self._last_pct_r: int = -1
+        self._disconnected_drawn: bool = False
 
         # Header Row
         self.header = ctk.CTkFrame(self, fg_color="transparent", height=22)
@@ -1076,7 +1501,7 @@ class PlayerDeckCard(ctk.CTkFrame):
 
         self.btn_swap = ctk.CTkButton(
             self.header,
-            text="⇄ SWAP",
+            text="SWAP",
             width=38,
             height=16,
             font=ctk.CTkFont(family="Consolas", size=7, weight="bold"),
@@ -1097,9 +1522,9 @@ class PlayerDeckCard(ctk.CTkFrame):
         )
         self.lbl_meta.pack(anchor="w", padx=6, pady=(0, 2))
 
-        # Visualizer Row (Radars + Triggers + Buttons)
+        # Visualizer Row (Radars + Shoulders/Triggers + Buttons)
         self.vis_row = ctk.CTkFrame(self, fg_color="#050608", corner_radius=4)
-        self.vis_row.pack(fill="x", padx=4, pady=(0, 4))
+        self.vis_row.pack(fill="x", padx=4, pady=(0, 2))
 
         self.radar_ls = MinimalStickRadar(self.vis_row, size=38, label="LS", player_color=COLOR_WHITE)
         self.radar_ls.pack(side="left", padx=1, pady=2)
@@ -1107,35 +1532,68 @@ class PlayerDeckCard(ctk.CTkFrame):
         self.radar_rs = MinimalStickRadar(self.vis_row, size=38, label="RS", player_color=COLOR_SLATE)
         self.radar_rs.pack(side="left", padx=1, pady=2)
 
-        self.triggers = MinimalTriggerMeter(self.vis_row, width=20, height=40)
-        self.triggers.pack(side="left", padx=1, pady=2)
+        self.triggers = MinimalShoulderCluster(self.vis_row)
+        self.triggers.pack(side="left", padx=2, pady=2)
 
         self.buttons = MinimalButtonCluster(self.vis_row)
         self.buttons.pack(side="right", padx=1, pady=2)
 
-        # 4 Dedicated Mini-Oscilloscopes for THIS Player
+        # Dual-Motor Haptic Feedback VU Meters (Individual for THIS player)
+        self.haptic_strip = ctk.CTkFrame(self, fg_color="#050608", corner_radius=3, height=16)
+        self.haptic_strip.pack(fill="x", padx=4, pady=(0, 2))
+
+        hs_inner = ctk.CTkFrame(self.haptic_strip, fg_color="transparent")
+        hs_inner.pack(fill="x", padx=4, pady=1)
+
+        self.lbl_haptic_l = ctk.CTkLabel(
+            hs_inner,
+            text="L-MTR 0%",
+            font=ctk.CTkFont(family="Consolas", size=7),
+            text_color=COLOR_TEXT_MUTED
+        )
+        self.lbl_haptic_l.pack(side="left")
+
+        self.prog_haptic_l = ctk.CTkProgressBar(hs_inner, height=3, width=38, fg_color="#12151b", progress_color=COLOR_WHITE)
+        self.prog_haptic_l.pack(side="left", padx=(3, 6))
+        self.prog_haptic_l.set(0.0)
+
+        self.prog_haptic_r = ctk.CTkProgressBar(hs_inner, height=3, width=38, fg_color="#12151b", progress_color=COLOR_SILVER)
+        self.prog_haptic_r.pack(side="right", padx=(3, 0))
+        self.prog_haptic_r.set(0.0)
+
+        self.lbl_haptic_r = ctk.CTkLabel(
+            hs_inner,
+            text="R-MTR 0%",
+            font=ctk.CTkFont(family="Consolas", size=7),
+            text_color=COLOR_TEXT_MUTED
+        )
+        self.lbl_haptic_r.pack(side="right")
+
+        # 4 Dedicated Mini-Oscilloscopes for THIS Player (Auto-Expanding Zero-Dead-Space Grid)
         self.osc_container = ctk.CTkFrame(self, fg_color="transparent")
-        self.osc_container.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        self.osc_container.pack(fill="both", expand=True, padx=4, pady=(0, 2))
+        self.osc_container.grid_rowconfigure((0, 1, 2, 3), weight=1)
+        self.osc_container.grid_columnconfigure(0, weight=1)
 
         # 1. Latency / Ping Oscilloscope
         self.osc_latency = MinimalOscilloscope(
             self.osc_container,
             title="Ping / Latency",
             unit="ms",
-            height=44,
+            height=40,
             min_val=0.0,
             max_val=30.0,
             grid_steps=2,
             traces=[{"name": "latency", "color": COLOR_WHITE, "min": 0.0, "max": 30.0}]
         )
-        self.osc_latency.pack(fill="x", pady=(0, 2))
+        self.osc_latency.grid(row=0, column=0, sticky="nsew", pady=1)
 
         # 2. Thumbsticks (LS & RS) 4-Trace Oscilloscope
         self.osc_stick = MinimalOscilloscope(
             self.osc_container,
             title="Thumbsticks (LS & RS)",
             unit="val",
-            height=54,
+            height=46,
             min_val=-32768.0,
             max_val=32767.0,
             grid_steps=3,
@@ -1146,14 +1604,14 @@ class PlayerDeckCard(ctk.CTkFrame):
                 {"name": "right_stick_y", "color": COLOR_PEWTER, "min": -32768.0, "max": 32767.0}
             ]
         )
-        self.osc_stick.pack(fill="x", pady=(0, 2))
+        self.osc_stick.grid(row=1, column=0, sticky="nsew", pady=1)
 
         # 3. Triggers (LT & RT) 2-Trace Oscilloscope
         self.osc_triggers = MinimalOscilloscope(
             self.osc_container,
             title="Triggers (LT & RT)",
             unit="val",
-            height=44,
+            height=40,
             min_val=0.0,
             max_val=255.0,
             grid_steps=2,
@@ -1162,14 +1620,14 @@ class PlayerDeckCard(ctk.CTkFrame):
                 {"name": "throttle", "color": COLOR_SILVER, "min": 0.0, "max": 255.0}
             ]
         )
-        self.osc_triggers.pack(fill="x", pady=(0, 2))
+        self.osc_triggers.grid(row=2, column=0, sticky="nsew", pady=1)
 
-        # 4. DSP: IMU vs Kalman (°) Oscilloscope
+        # 4. DSP: IMU vs Kalman (°) Oscilloscope (Per-Player Isolated Signal)
         self.osc_kalman = MinimalOscilloscope(
             self.osc_container,
             title="DSP: IMU vs Kalman",
             unit="°",
-            height=44,
+            height=40,
             min_val=-45.0,
             max_val=45.0,
             grid_steps=2,
@@ -1178,7 +1636,7 @@ class PlayerDeckCard(ctk.CTkFrame):
                 {"name": "kalman", "color": COLOR_WHITE, "min": -45.0, "max": 45.0}
             ]
         )
-        self.osc_kalman.pack(fill="x")
+        self.osc_kalman.grid(row=3, column=0, sticky="nsew", pady=1)
 
     def _on_test_click(self) -> None:
         if self.on_test_callback:
@@ -1196,6 +1654,7 @@ class PlayerDeckCard(ctk.CTkFrame):
         if connected != self._last_connected:
             self._last_connected = connected
             if connected:
+                self._disconnected_drawn = False
                 self.configure(border_color=COLOR_CARD_ACTIVE)
                 self.lbl_status.configure(text="LIVE", text_color="#08090b", fg_color=COLOR_WHITE)
             else:
@@ -1205,28 +1664,89 @@ class PlayerDeckCard(ctk.CTkFrame):
                 self._last_meta_str = ""
                 self.radar_ls.set_position(0, 0)
                 self.radar_rs.set_position(0, 0)
-                self.triggers.set_triggers(0, 0)
+                self.triggers.update_shoulders({}, 0, 0)
                 self.buttons.set_states({})
 
-        if connected:
-            ip = slot_data.get("client_ip", "127.0.0.1")
-            rtt = slot_data.get("rtt_ms", 0.0)
-            hz = slot_data.get("hz", 0.0)
-            pkts = slot_data.get("packets", 0)
-            meta_str = f"{ip} • {rtt:.1f}ms • {hz:.0f}Hz • {pkts}p"
-            if meta_str != self._last_meta_str:
-                self._last_meta_str = meta_str
-                self.lbl_meta.configure(text=meta_str, text_color=COLOR_TEXT_PRIMARY)
+        if not connected:
+            if not self._disconnected_drawn:
+                self._disconnected_drawn = True
+                if self._last_pct_l != 0:
+                    self._last_pct_l = 0
+                    self.prog_haptic_l.set(0.0)
+                    self.lbl_haptic_l.configure(text="L-MTR 0%", text_color=COLOR_TEXT_MUTED)
+                if self._last_pct_r != 0:
+                    self._last_pct_r = 0
+                    self.prog_haptic_r.set(0.0)
+                    self.lbl_haptic_r.configure(text="R-MTR 0%", text_color=COLOR_TEXT_MUTED)
 
-            self.radar_ls.set_position(slot_data.get("stick_x", 0), slot_data.get("stick_y", 0))
-            self.radar_rs.set_position(slot_data.get("right_stick_x", 0), slot_data.get("right_stick_y", 0))
-            self.triggers.set_triggers(slot_data.get("throttle", 0), slot_data.get("brake", 0))
-            self.buttons.set_states(slot_data.get("buttons", {}))
+                # Render baseline traces once on disconnect
+                lat_wave = slot_data.get("latency_wave", [])
+                if lat_wave:
+                    self.osc_latency.update_trace("latency", lat_wave, current_val=None)
+                sx_wave = slot_data.get("stick_x_wave", [])
+                sy_wave = slot_data.get("stick_y_wave", [])
+                rx_wave = slot_data.get("right_stick_x_wave", [])
+                ry_wave = slot_data.get("right_stick_y_wave", [])
+                if sx_wave:
+                    self.osc_stick.update_trace("stick_x", sx_wave)
+                if sy_wave:
+                    self.osc_stick.update_trace("stick_y", sy_wave)
+                if rx_wave:
+                    self.osc_stick.update_trace("right_stick_x", rx_wave)
+                if ry_wave:
+                    self.osc_stick.update_trace("right_stick_y", ry_wave)
+                th_wave = slot_data.get("throttle_wave", [])
+                br_wave = slot_data.get("brake_wave", [])
+                if br_wave:
+                    self.osc_triggers.update_trace("brake", br_wave)
+                if th_wave:
+                    self.osc_triggers.update_trace("throttle", th_wave)
+                raw_wave = slot_data.get("raw_angle_wave", [])
+                kalman_wave = slot_data.get("kalman_angle_wave", [])
+                if raw_wave:
+                    self.osc_kalman.update_trace("raw_imu", raw_wave)
+                if kalman_wave:
+                    self.osc_kalman.update_trace("kalman", kalman_wave, current_val=None)
+            return
 
-        # Always update live rolling waveforms for this player
+        ip = slot_data.get("client_ip", "127.0.0.1")
+        rtt = slot_data.get("rtt_ms", 0.0)
+        hz = slot_data.get("hz", 0.0)
+        pkts = slot_data.get("packets", 0)
+        meta_str = f"{ip} • {rtt:.1f}ms • {hz:.0f}Hz • {pkts}p"
+        if meta_str != self._last_meta_str:
+            self._last_meta_str = meta_str
+            self.lbl_meta.configure(text=meta_str, text_color=COLOR_TEXT_PRIMARY)
+
+        self.radar_ls.set_position(slot_data.get("stick_x", 0), slot_data.get("stick_y", 0))
+        self.radar_rs.set_position(slot_data.get("right_stick_x", 0), slot_data.get("right_stick_y", 0))
+        self.triggers.update_shoulders(
+            slot_data.get("buttons", {}),
+            slot_data.get("throttle", 0),
+            slot_data.get("brake", 0)
+        )
+        self.buttons.set_states(slot_data.get("buttons", {}))
+
+        # Update per-controller Haptic Force-Feedback VU meters
+        l_rumble = slot_data.get("large_motor_rumble", 0)
+        r_rumble = slot_data.get("small_motor_rumble", 0)
+        norm_l = min(1.0, max(0.0, l_rumble / 255.0 if l_rumble <= 255 else l_rumble / 65535.0))
+        norm_r = min(1.0, max(0.0, r_rumble / 255.0 if r_rumble <= 255 else r_rumble / 65535.0))
+        pct_l = int(norm_l * 100)
+        pct_r = int(norm_r * 100)
+        if pct_l != self._last_pct_l:
+            self._last_pct_l = pct_l
+            self.prog_haptic_l.set(norm_l)
+            self.lbl_haptic_l.configure(text=f"L-MTR {pct_l}%", text_color=COLOR_WHITE if pct_l > 0 else COLOR_TEXT_MUTED)
+        if pct_r != self._last_pct_r:
+            self._last_pct_r = pct_r
+            self.prog_haptic_r.set(norm_r)
+            self.lbl_haptic_r.configure(text=f"R-MTR {pct_r}%", text_color=COLOR_WHITE if pct_r > 0 else COLOR_TEXT_MUTED)
+
+        # Always update live rolling waveforms for this connected player
         lat_wave = slot_data.get("latency_wave", [])
         if lat_wave:
-            self.osc_latency.update_trace("latency", lat_wave, current_val=slot_data.get("rtt_ms") if connected else None)
+            self.osc_latency.update_trace("latency", lat_wave, current_val=slot_data.get("rtt_ms"))
 
         sx_wave = slot_data.get("stick_x_wave", [])
         sy_wave = slot_data.get("stick_y_wave", [])
@@ -1253,7 +1773,7 @@ class PlayerDeckCard(ctk.CTkFrame):
         if raw_wave:
             self.osc_kalman.update_trace("raw_imu", raw_wave)
         if kalman_wave:
-            self.osc_kalman.update_trace("kalman", kalman_wave, current_val=slot_data.get("filtered_angle") if connected else None)
+            self.osc_kalman.update_trace("kalman", kalman_wave, current_val=slot_data.get("filtered_angle"))
 
 
 class ControllerDashboard(ctk.CTk):
@@ -1274,6 +1794,7 @@ class ControllerDashboard(ctk.CTk):
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("dark-blue")
         set_window_logo_icon(self)
+        self.after(50, lambda: enable_dark_title_bar(self))
 
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -1301,12 +1822,14 @@ class ControllerDashboard(ctk.CTk):
         except Exception as e:
             logger.debug(f"Could not open terms dialog: {e}")
 
-    def open_viva_dialog(self) -> None:
-        """Opens the Academic Viva Defense & Benchmark Suite modal dialog."""
+    def open_benchmark_dialog(self) -> None:
+        """Opens the Performance Benchmark & Signal Diagnostics modal dialog."""
         try:
-            VivaDefenseDialog(self, self.bridge)
+            SystemBenchmarkDialog(self, self.bridge)
         except Exception as e:
-            logger.debug(f"Could not open viva defense dialog: {e}")
+            logger.debug(f"Could not open benchmark dialog: {e}")
+
+    open_viva_dialog = open_benchmark_dialog
 
     def _build_top_bar(self) -> None:
         top = ctk.CTkFrame(self, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=0, height=38)
@@ -1318,7 +1841,7 @@ class ControllerDashboard(ctk.CTk):
         # Embedded Logo in Top Header Bar
         logo_img = get_logo_ctk_image((26, 26))
         if logo_img:
-            lbl_top_logo = ctk.CTkLabel(left, image=logo_img, text="")
+            lbl_top_logo = ctk.CTkLabel(left, image=logo_img, text="", fg_color="transparent")
             lbl_top_logo.pack(side="left", padx=(0, 8))
 
         lbl_brand = ctk.CTkLabel(
@@ -1332,24 +1855,24 @@ class ControllerDashboard(ctk.CTk):
         right = ctk.CTkFrame(top, fg_color="transparent")
         right.pack(side="right", padx=10, pady=3)
 
-        # Viva Defense Suite Modal Button
-        btn_viva = ctk.CTkButton(
+        # Benchmark & Diagnostics Suite Modal Button
+        btn_bench = ctk.CTkButton(
             right,
-            text="⚡ VIVA & BENCHMARK",
+            text="BENCHMARK & DIAGNOSTICS",
             font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             fg_color="#f0f6fc",
             hover_color="#ffffff",
             text_color="#08090b",
             height=22,
             corner_radius=3,
-            command=self.open_viva_dialog
+            command=self.open_benchmark_dialog
         )
-        btn_viva.pack(side="left", padx=4)
+        btn_bench.pack(side="left", padx=4)
 
         # About / Terms Button
         btn_about = ctk.CTkButton(
             right,
-            text="ℹ️ ABOUT & TERMS",
+            text="ABOUT & TERMS",
             font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
@@ -1357,6 +1880,7 @@ class ControllerDashboard(ctk.CTk):
             border_color=COLOR_CARD_BORDER,
             border_width=1,
             height=22,
+            corner_radius=3,
             command=self.open_terms_dialog
         )
         btn_about.pack(side="left", padx=4)
@@ -1364,18 +1888,19 @@ class ControllerDashboard(ctk.CTk):
         # 1-Click Driver Installer Button (shown only if driver missing)
         self.btn_install_driver = ctk.CTkButton(
             right,
-            text="⚡ INSTALL DRIVER",
+            text="INSTALL DRIVER",
             font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             fg_color="#30363d",
             hover_color="#484f58",
             text_color="#ffffff",
             height=22,
+            corner_radius=3,
             command=self._install_vigem_driver
         )
 
         self.badge_status = ctk.CTkLabel(
             right,
-            text="● ONLINE",
+            text="ONLINE",
             font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
             text_color="#08090b",
             fg_color=COLOR_WHITE,
@@ -1442,15 +1967,15 @@ class ControllerDashboard(ctk.CTk):
         body.pack(fill="both", expand=True, padx=6, pady=4)
 
         # Left Column: QR & Pairing (Width ~175px)
-        col_left = ctk.CTkFrame(body, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=6, width=175)
+        col_left = ctk.CTkFrame(body, fg_color=COLOR_CARD, border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=4, width=175)
         col_left.pack(side="left", fill="y", padx=(0, 6))
         col_left.pack_propagate(False)
 
-        # Embedded Logo in Pairing Sidebar
-        side_logo = get_logo_ctk_image((48, 48))
+        # Embedded Logo in Pairing Sidebar (Clean, transparent, no outer line)
+        side_logo = get_logo_ctk_image((42, 42))
         if side_logo:
-            lbl_side_logo = ctk.CTkLabel(col_left, image=side_logo, text="")
-            lbl_side_logo.pack(pady=(6, 0))
+            lbl_side_logo = ctk.CTkLabel(col_left, image=side_logo, text="", fg_color="transparent")
+            lbl_side_logo.pack(pady=(8, 2))
 
         lbl_qr_title = ctk.CTkLabel(
             col_left,
@@ -1460,7 +1985,7 @@ class ControllerDashboard(ctk.CTk):
         )
         lbl_qr_title.pack(pady=(2, 2))
 
-        self.qr_container = ctk.CTkLabel(col_left, text="", fg_color="#050608", corner_radius=4)
+        self.qr_container = ctk.CTkLabel(col_left, text="", fg_color="#050608", corner_radius=3)
         self.qr_container.pack(padx=6, pady=2)
 
         self.lbl_url = ctk.CTkLabel(
@@ -1479,7 +2004,9 @@ class ControllerDashboard(ctk.CTk):
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
             text_color=COLOR_TEXT_PRIMARY,
-            height=20,
+            width=150,
+            height=22,
+            corner_radius=3,
             command=self._copy_url_to_clipboard
         )
         btn_copy.pack(pady=3)
@@ -1495,98 +2022,50 @@ class ControllerDashboard(ctk.CTk):
 
         btn_swap_12 = ctk.CTkButton(
             col_left,
-            text="⇄ SWAP P1 / P2",
+            text="SWAP P1 / P2",
             font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
             text_color=COLOR_TEXT_PRIMARY,
-            height=20,
+            width=150,
+            height=22,
+            corner_radius=3,
             command=lambda: self._on_card_swap(0, 1)
         )
         btn_swap_12.pack(pady=2)
 
         btn_swap_34 = ctk.CTkButton(
             col_left,
-            text="⇄ SWAP P3 / P4",
+            text="SWAP P3 / P4",
             font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
             text_color=COLOR_TEXT_PRIMARY,
-            height=20,
+            width=150,
+            height=22,
+            corner_radius=3,
             command=lambda: self._on_card_swap(2, 3)
         )
         btn_swap_34.pack(pady=2)
 
-        # Haptic Telepresence Rumble VU Meters
-        lbl_rumble_title = ctk.CTkLabel(
-            col_left,
-            text="HAPTIC TELEPRESENCE",
-            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
-            text_color=COLOR_TEXT_MUTED
-        )
-        lbl_rumble_title.pack(pady=(6, 1))
-
-        rumble_frame = ctk.CTkFrame(col_left, fg_color="#050608", corner_radius=4)
-        rumble_frame.pack(fill="x", padx=6, pady=2)
-
-        r_sub_l = ctk.CTkFrame(rumble_frame, fg_color="transparent")
-        r_sub_l.pack(fill="x", padx=4, pady=(2, 0))
-        self.lbl_rumble_l = ctk.CTkLabel(
-            r_sub_l,
-            text="L-MOTOR",
-            font=ctk.CTkFont(family="Consolas", size=7),
-            text_color=COLOR_TEXT_MUTED
-        )
-        self.lbl_rumble_l.pack(side="left")
-        self.lbl_rumble_l_val = ctk.CTkLabel(
-            r_sub_l,
-            text="0%",
-            font=ctk.CTkFont(family="Consolas", size=7, weight="bold"),
-            text_color=COLOR_WHITE
-        )
-        self.lbl_rumble_l_val.pack(side="right")
-
-        self.prog_rumble_l = ctk.CTkProgressBar(rumble_frame, height=4, fg_color="#161b22", progress_color=COLOR_WHITE)
-        self.prog_rumble_l.pack(fill="x", padx=4, pady=(0, 2))
-        self.prog_rumble_l.set(0.0)
-
-        r_sub_r = ctk.CTkFrame(rumble_frame, fg_color="transparent")
-        r_sub_r.pack(fill="x", padx=4, pady=(2, 0))
-        self.lbl_rumble_r = ctk.CTkLabel(
-            r_sub_r,
-            text="R-MOTOR",
-            font=ctk.CTkFont(family="Consolas", size=7),
-            text_color=COLOR_TEXT_MUTED
-        )
-        self.lbl_rumble_r.pack(side="left")
-        self.lbl_rumble_r_val = ctk.CTkLabel(
-            r_sub_r,
-            text="0%",
-            font=ctk.CTkFont(family="Consolas", size=7, weight="bold"),
-            text_color=COLOR_WHITE
-        )
-        self.lbl_rumble_r_val.pack(side="right")
-
-        self.prog_rumble_r = ctk.CTkProgressBar(rumble_frame, height=4, fg_color="#161b22", progress_color=COLOR_SILVER)
-        self.prog_rumble_r.pack(fill="x", padx=4, pady=(0, 4))
-        self.prog_rumble_r.set(0.0)
-
         # Support & Donation Button in Sidebar
         btn_donate = ctk.CTkButton(
             col_left,
-            text="☕ SUPPORT / DONATE",
+            text="DONATE",
             font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
             fg_color=COLOR_SURFACE,
             hover_color=COLOR_SURFACE_HOVER,
             text_color=COLOR_TEXT_PRIMARY,
-            height=20,
+            width=150,
+            height=22,
+            corner_radius=3,
             command=lambda: webbrowser.open("https://buymeacoffee.com/unitynimit")
         )
         btn_donate.pack(side="bottom", pady=(2, 6))
 
         lbl_hint = ctk.CTkLabel(
             col_left,
-            text="Scan camera to join\n[TEST] wakes testers\n[⇄ SWAP] fixes slots",
+            text="Scan camera to join\n[TEST] wakes testers\n[SWAP] fixes slots",
             font=ctk.CTkFont(family="Consolas", size=7),
             text_color=COLOR_TEXT_MUTED,
             justify="center"
@@ -1695,7 +2174,7 @@ class ControllerDashboard(ctk.CTk):
         self.update()
 
     def _render_loop(self) -> None:
-        """Continuous, ultra-responsive 50 FPS render pump for all 4 player decks."""
+        """Continuous, ultra-responsive up to ~300 FPS render pump for all 4 player decks."""
         self._tick += 1
         snap = self.bridge.get_snapshot()
 
@@ -1705,18 +2184,8 @@ class ControllerDashboard(ctk.CTk):
             if i < len(self.player_decks):
                 self.player_decks[i].update_state(sdata)
 
-        # Update Haptic Feedback VU meters
-        l_rumble = snap.get("large_motor_rumble", 0)
-        r_rumble = snap.get("small_motor_rumble", 0)
-        norm_l = min(1.0, max(0.0, l_rumble / 65535.0))
-        norm_r = min(1.0, max(0.0, r_rumble / 65535.0))
-        self.prog_rumble_l.set(norm_l)
-        self.prog_rumble_r.set(norm_r)
-        self.lbl_rumble_l_val.configure(text=f"{int(norm_l * 100)}%")
-        self.lbl_rumble_r_val.configure(text=f"{int(norm_r * 100)}%")
-
-        # Slow text updates (~4Hz, every 12 ticks)
-        if self._tick % 12 == 0:
+        # Slow text updates (~5Hz, every 60 ticks)
+        if self._tick % 60 == 0:
             url = snap.get("server_url", "")
             if url and url != self._last_url:
                 self.lbl_url.configure(text=url)
@@ -1749,8 +2218,8 @@ class ControllerDashboard(ctk.CTk):
                 self._last_hz_str = hz_str
                 self.lbl_hz.configure(text=hz_str)
 
-        # Log Ticker
-        if self._tick % 15 == 0:
+        # Log Ticker (~4Hz, every 75 ticks)
+        if self._tick % 75 == 0:
             last_entry = None
             while True:
                 try:
@@ -1760,8 +2229,8 @@ class ControllerDashboard(ctk.CTk):
             if last_entry:
                 self.lbl_log.configure(text=f"[{last_entry['timestamp']}] {last_entry['message']}")
 
-        # Next frame in 20ms (~50 FPS)
-        self.after(20, self._render_loop)
+        # Next frame in 3ms (~300 FPS target)
+        self.after(3, self._render_loop)
 
     def _on_window_close(self) -> None:
         if self.on_close_callback:
