@@ -14,6 +14,8 @@
 <body>
   <!-- Hidden Native iOS 17.4+ Haptic Switch -->
   <input type="checkbox" switch id="ios-haptic-switch" style="position:fixed;top:-500px;left:-500px;opacity:0.0001;pointer-events:none;z-index:-9999;" />
+  <!-- Safe Area Inset Probe -->
+  <div id="safe-area-probe" style="position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);visibility:hidden;pointer-events:none;z-index:-9999;"></div>
 
   <!-- =======================================================================
        1. STARTING SCREEN: Pure Pitch Black with Logo.png in Absolute Center
@@ -62,7 +64,7 @@
         <span class="btn-text">Back</span>
       </button>
 
-      <div class="circle-gyro mod-gyro" id="mod-gyro" data-custom-id="mod-gyro" title="Toggle Gyroscope Steering"><div class="l1-resize-handle" data-target="mod-gyro"></div>
+      <div class="circle-gyro mod-gyro active" id="mod-gyro" data-custom-id="mod-gyro" title="Toggle Gyroscope Steering"><div class="l1-resize-handle" data-target="mod-gyro"></div>
         <canvas id="gyro-canvas" class="gyro-canvas" style="display:none;"></canvas>
         <div class="gyro-horizon-line" id="gyro-horizon-line"></div>
       </div>
@@ -145,7 +147,7 @@
       <!-- =====================================================================
            LAYOUT 1 CUSTOMIZATION HUD & JOYSTICK RADIUS SLIDER
            ===================================================================== -->
-      <div class="l1-custom-hud" id="l1-custom-hud">
+      <div class="l1-custom-hud" id="l1-custom-hud" style="display:none !important;">
         <div class="l1-custom-badge"><span class="l1-pulse-dot"></span>CUSTOMIZE MODE</div>
         <div class="l1-custom-instructions">Drag • Corner to Resize • Tap Stick for Radius</div>
         <button class="l1-test-vibe-btn" id="l1-test-vibe-btn" type="button" title="Test Phone Vibration & Haptics">⚡ VIBE TEST</button>

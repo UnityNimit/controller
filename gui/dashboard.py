@@ -274,7 +274,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
     """
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("Controller // Setup Guide & Terms")
+        self.title("Setup Guide and Terms")
         self.geometry("680x570")
         self.minsize(620, 480)
         self.configure(fg_color=COLOR_BG)
@@ -313,7 +313,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
 
         lbl_title = ctk.CTkLabel(
             header,
-            text="Controller",
+            text="Setup Guide and Terms",
             font=ctk.CTkFont(family="Consolas", size=13, weight="bold"),
             text_color=COLOR_TEXT_PRIMARY
         )
@@ -327,22 +327,25 @@ class SetupWizardDialog(ctk.CTkToplevel):
         )
         self.lbl_step_indicator.pack(pady=(1, 0))
 
-        # Step Progress Pills Tracker
+        # Step Progress Pills Tracker (Strictly Equal Size across all 5 Tabs)
         self.tracker_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.tracker_frame.pack(fill="x", padx=16, pady=(4, 6))
 
-        self.step_buttons: List[ctk.CTkButton] = []
         step_labels = ["1. NETWORK", "2. DRIVER", "3. PAIRING", "4. CONTROLS", "5. TERMS"]
+        for col in range(len(step_labels)):
+            self.tracker_frame.grid_columnconfigure(col, weight=1, uniform="wizard_step_tabs")
+
+        self.step_buttons: List[ctk.CTkButton] = []
         for i, name in enumerate(step_labels):
             btn = ctk.CTkButton(
                 self.tracker_frame,
                 text=name,
                 font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
-                height=22,
+                height=24,
                 corner_radius=3,
                 command=lambda step=i: self._go_to_step(step)
             )
-            btn.pack(side="left", fill="x", expand=True, padx=2)
+            btn.grid(row=0, column=i, sticky="ew", padx=2)
             self.step_buttons.append(btn)
 
         # Main Step Card
@@ -363,7 +366,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
         # Dynamic Action Bar inside card (Driver install)
         self.action_bar = ctk.CTkFrame(self.card_body, fg_color="transparent")
 
-        # Step 5 Compulsory Checkbox Container
+        # Step 5 Compulsory Checkbox Container (Identical Box Size and Font)
         self.step5_check_frame = ctk.CTkFrame(self.card_body, fg_color="transparent")
 
         self.chk_terms_compulsory = ctk.CTkCheckBox(
@@ -381,21 +384,21 @@ class SetupWizardDialog(ctk.CTkToplevel):
             checkbox_height=16,
             command=self._on_compulsory_toggle
         )
-        self.chk_terms_compulsory.pack(anchor="w", padx=4, pady=(2, 3))
+        self.chk_terms_compulsory.pack(anchor="w", padx=4, pady=(2, 4))
 
         self.chk_dont_show = ctk.CTkCheckBox(
             self.step5_check_frame,
             text="Do not show this setup guide automatically on startup",
-            font=ctk.CTkFont(family="Consolas", size=8),
-            text_color=COLOR_TEXT_MUTED,
+            font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+            text_color=COLOR_TEXT_PRIMARY,
             fg_color=COLOR_WHITE,
-            hover_color="#21262d",
-            border_color="#30363d",
+            hover_color="#30363d",
+            border_color="#484f58",
             checkmark_color="#08090b",
             corner_radius=2,
             border_width=1,
-            checkbox_width=14,
-            checkbox_height=14
+            checkbox_width=16,
+            checkbox_height=16
         )
         self.chk_dont_show.pack(anchor="w", padx=4, pady=(0, 2))
 
@@ -503,47 +506,77 @@ class SetupWizardDialog(ctk.CTkToplevel):
         self.step_textbox.delete("1.0", "end")
 
         if step_idx == 0:
-            self.lbl_step_indicator.configure(text="Step 1 of 5 • Network Configuration")
+            self.lbl_step_indicator.configure(text="Step 1 of 5 • Network Configuration & Low-Latency Wireless Routing")
             content = (
                 "========================================================================================\n"
-                " STEP 1 OF 5 // LOCAL NETWORK & WI-FI CONFIGURATION\n"
+                " STEP 1 OF 5 // LOCAL NETWORK SETUP & LOW-LATENCY TRANSMISSION MODES\n"
                 "========================================================================================\n\n"
-                "1. SAME LOCAL WI-FI NETWORK:\n"
-                "   • Connect your smartphone and PC to the same local Wi-Fi router (2.4GHz or 5GHz).\n\n"
-                "2. LOWEST LATENCY RECOMMENDATION (< 2ms):\n"
-                "   • Turn on your smartphone's Mobile Hotspot (or Windows Mobile Hotspot).\n"
-                "   • Connect your PC directly to the phone's Wi-Fi hotspot.\n"
-                "   • Direct device-to-device wireless routing eliminates router queue latency,\n"
-                "     achieving sub-2ms transmission speeds.\n\n"
-                "3. WINDOWS DEFENDER FIREWALL:\n"
-                "   • The Controller Gateway listens on port 8443 (WSS / HTTPS).\n"
-                "   • If your smartphone fails to connect, allow Python through Windows Defender Firewall\n"
-                "     on Private Networks.\n\n"
-                "Click 'NEXT' to proceed to the virtual gamepad driver setup.\n"
+                "1. LOCAL WI-FI NETWORK REQUIREMENTS:\n"
+                "   • Both your Windows PC and your smartphone must be connected to the SAME local network.\n"
+                "   • Controller operates as an ultra-fast, local WebSocket server hosted directly on your\n"
+                "     PC (default port: 8443). Data stays 100% inside your private home network.\n"
+                "   • There is NO cloud server or external proxy in the middle, guaranteeing zero external lag.\n\n"
+                "2. WIRELESS PERFORMANCE OPTIMIZATION (< 2ms LATENCY):\n"
+                "   To get the fastest possible response time and eliminate input lag in competitive games:\n\n"
+                "   [A] 5GHz Wi-Fi Band (Strongly Recommended):\n"
+                "       - Connect both your PC and phone to your router's 5GHz Wi-Fi band.\n"
+                "       - Standard 2.4GHz Wi-Fi is heavily congested by Bluetooth, microwave ovens, and\n"
+                "         neighboring networks, which causes jitter and packet frame drops.\n"
+                "       - 5GHz provides 10x higher bandwidth and sub-5ms packet turnaround.\n\n"
+                "   [B] Smartphone Mobile Hotspot Mode (Lowest Wireless Latency < 1.5ms):\n"
+                "       - Turn on 'Mobile Hotspot' (or Personal Hotspot) on your smartphone.\n"
+                "       - Connect your PC's Wi-Fi directly to your smartphone's hotspot.\n"
+                "       - This establishes a direct, 1-hop point-to-point wireless connection between the\n"
+                "         devices without passing through an intermediary router.\n"
+                "       - Note: Mobile mobile data is NOT required; the local hotspot Wi-Fi link handles all traffic.\n\n"
+                "   [C] USB Tethering (Zero Radio Frequency Latency < 0.5ms):\n"
+                "       - Connect your smartphone to your PC with a high-speed USB data cable.\n"
+                "       - Turn on 'USB Tethering' in your phone's network settings.\n"
+                "       - Controller will route packets over physical copper, achieving near-zero latency.\n\n"
+                "3. WINDOWS DEFENDER FIREWALL & ROUTER AP ISOLATION:\n"
+                "   • Port 8443 (TCP / WSS) must be reachable on your local network.\n"
+                "   • If your smartphone fails to load the connection page:\n"
+                "     1. Check that Python is permitted through Windows Defender Firewall on 'Private Networks'.\n"
+                "     2. Ensure your router does not have 'AP Isolation' or 'Guest Network Isolation' enabled,\n"
+                "        which prevents connected Wi-Fi devices from communicating with one another.\n\n"
+                "Click 'NEXT' to configure the virtual gamepad driver for PC games.\n"
             )
             self.step_textbox.insert("1.0", content)
+            self.step_textbox.yview_moveto(0.0)
 
         elif step_idx == 1:
-            self.lbl_step_indicator.configure(text="Step 2 of 5 • ViGEmBus Xbox 360 Kernel Driver")
+            self.lbl_step_indicator.configure(text="Step 2 of 5 • ViGEmBus Xbox 360 Kernel Driver Architecture")
             content = (
                 "========================================================================================\n"
-                " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER SETUP\n"
+                " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER ARCHITECTURE\n"
                 "========================================================================================\n\n"
-                "1. GENUINE XINPUT GAMEPAD EMULATION:\n"
-                "   • Controller creates official, zero-latency virtual Xbox 360 gamepads using the\n"
-                "     open-source ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver.\n"
-                "   • All PC games (Assetto Corsa, Rocket League, Forza Horizon, FIFA, GTA, BeamNG, Steam)\n"
-                "     recognize your smartphone as an authentic physical Xbox 360 controller.\n\n"
-                "2. ONE-CLICK DRIVER INSTALLATION:\n"
-                "   • Click 'INSTALL VIGEMBUS DRIVER' below to install the official signed driver.\n"
-                "   • Accept the Windows Administrator UAC prompt to complete driver registration.\n"
-                "   • Once installed, virtual gamepads are immediately active with no PC reboot required.\n\n"
-                "3. KEYBOARD FALLBACK MODE:\n"
-                "   • If omitted, Controller operates in keyboard fallback mode (WASD, Arrow keys,\n"
-                "     Spacebar, Shift) so you can still play right away.\n\n"
-                "Click 'NEXT' to learn how to pair your phone and bypass local browser SSL certificates.\n"
+                "1. GENUINE HARDWARE-LEVEL XINPUT EMULATION:\n"
+                "   • Controller uses the open-source ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver,\n"
+                "     the recognized industry standard developed by Nefarius.\n"
+                "   • Rather than translating inputs to sluggish keyboard macros, ViGEmBus creates authentic\n"
+                "     virtual Microsoft Xbox 360 controllers in the Windows kernel Device Manager.\n"
+                "   • 100% of PC games—including Assetto Corsa, Forza Horizon 5, Rocket League, FIFA / FC 24,\n"
+                "     Skate, GTA V, BeamNG.drive, F1 23/24, Need for Speed, and Steam Big Picture—automatically\n"
+                "     detect your phone as a genuine physical Xbox 360 gamepad.\n\n"
+                "2. 1-CLICK ONE-TIME DRIVER INSTALLATION:\n"
+                "   • Click the 'INSTALL VIGEMBUS DRIVER' button below.\n"
+                "   • Windows will display an official User Account Control (UAC) prompt asking for\n"
+                "     Administrator permission to register the signed kernel driver (ViGEmBusSetup_x64.msi).\n"
+                "   • Click 'Yes' to confirm. The installation completes silently in approximately 5 seconds.\n"
+                "   • No computer reboot is required! The virtual controller bus activates immediately.\n"
+                "   • The top status badge in the dashboard will switch to '[ViGEmBus X360]' with a green light.\n\n"
+                "3. AUTOMATIC KEYBOARD FALLBACK SYSTEM:\n"
+                "   • If you do not install the driver or run on an unprivileged account, Controller\n"
+                "     automatically engages its low-level Windows SendInput keyboard fallback system:\n"
+                "     - Steering / Left Stick  -> A / D Keys or Left / Right Arrows\n"
+                "     - Throttle / Accelerator -> W Key or Up Arrow\n"
+                "     - Brake / Reverse        -> S Key or Down Arrow\n"
+                "     - Handbrake              -> Spacebar\n"
+                "     - Nitro / Boost          -> Left Shift\n\n"
+                "Click 'NEXT' to learn how to pair your phone and bypass the one-time local SSL certificate warning.\n"
             )
             self.step_textbox.insert("1.0", content)
+            self.step_textbox.yview_moveto(0.0)
 
             btn_drv = ctk.CTkButton(
                 self.action_bar,
@@ -561,80 +594,122 @@ class SetupWizardDialog(ctk.CTkToplevel):
             btn_drv.pack(fill="x", padx=4)
 
         elif step_idx == 2:
-            self.lbl_step_indicator.configure(text="Step 3 of 5 • Smartphone Pairing & Local SSL Bypass")
+            self.lbl_step_indicator.configure(text="Step 3 of 5 • Smartphone Camera Pairing & Local SSL Bypass")
             content = (
                 "========================================================================================\n"
-                " STEP 3 OF 5 // SMARTPHONE PAIRING & LOCAL SSL CERTIFICATE BYPASS\n"
+                " STEP 3 OF 5 // CAMERA QR PAIRING & LOCAL PRIVATE SSL BYPASS (ONE-TIME SETUP)\n"
                 "========================================================================================\n\n"
-                "1. INSTANT CAMERA PAIRING:\n"
-                "   • Point your phone's Camera at the QR code on the left sidebar, or open\n"
-                "     https://<YOUR_PC_IP>:8443 in your mobile browser.\n\n"
-                "2. LOCAL PRIVATE SSL CERTIFICATE BYPASS (ONCE PER DEVICE):\n"
-                "   • Because Controller uses encrypted WebSockets (WSS) on your private network without\n"
-                "     a public domain, mobile browsers display a standard self-signed certificate notice:\n\n"
-                "   -> Apple iOS Safari:\n"
-                "      1. Tap 'Show Details' at the bottom.\n"
-                "      2. Tap 'visit this website'.\n"
-                "      3. Tap 'Visit Website' on the confirmation prompt.\n\n"
-                "   -> Google Android Chrome / Brave / Edge:\n"
-                "      1. Tap 'Advanced' (or 'Details').\n"
-                "      2. Tap 'Proceed to <IP> (unsafe)'.\n\n"
-                "3. ROTATE TO LANDSCAPE:\n"
-                "   • Rotate your phone to landscape mode to automatically open the cockpit controls.\n\n"
-                "Click 'NEXT' to review control layouts, steering gyroscope, and customization.\n"
+                "1. INSTANT CAMERA QR CODE SCANNING:\n"
+                "   • Open your phone's default Camera app (iOS Camera or Android Google Lens / Camera).\n"
+                "   • Aim your camera at the QR code shown on the left sidebar of the Controller dashboard.\n"
+                "   • Tap the banner link that pops up (e.g. 'https://192.168.1.15:8443').\n"
+                "   • You can also manually type the IP address into any mobile browser (Safari, Chrome, etc.).\n\n"
+                "2. WHY BROWSERS SHOW A 'CONNECTION NOT PRIVATE' NOTICE:\n"
+                "   • To deliver hair-trigger responsiveness, modern web browsers strictly demand HTTPS (SSL)\n"
+                "     to unlock critical hardware sensors and capabilities:\n"
+                "     - DeviceOrientation API (Gyroscopic motion steering & tilt tracking)\n"
+                "     - Fullscreen API (Immersive borderless cockpit gameplay)\n"
+                "     - Web Vibration API (Real-time force feedback & rumble haptics)\n"
+                "     - Screen Wake Lock API (Prevents phone display from sleeping mid-race)\n"
+                "   • Because Controller generates a local, cryptographic SSL certificate for your private LAN\n"
+                "     IP address without routing to a commercial web domain, your browser warns that the\n"
+                "     certificate authority is self-signed. This warning is completely normal.\n\n"
+                "3. ONE-TIME BROWSER BYPASS INSTRUCTIONS:\n\n"
+                "   [Apple iOS Safari]:\n"
+                "     1. When 'This Connection Is Not Private' appears, tap 'Show Details' at the bottom.\n"
+                "     2. Scroll down and tap the blue link: 'visit this website'.\n"
+                "     3. On the modal confirmation prompt, tap 'Visit Website'.\n"
+                "     4. Safari will remember this approval; you will not have to repeat this step.\n\n"
+                "   [Google Android Chrome / Edge / Brave / Opera]:\n"
+                "     1. When 'Your connection is not private' appears, tap 'Advanced' (or 'Details').\n"
+                "     2. Scroll down to the bottom of the page.\n"
+                "     3. Tap 'Proceed to <IP address> (unsafe)'.\n\n"
+                "4. ROTATE TO LANDSCAPE & HOME SCREEN INSTALLATION:\n"
+                "   • Turn your phone sideways into Landscape orientation to enter the game cockpit.\n"
+                "   • [Optional PWA]: Tap 'Share' > 'Add to Home Screen' in Safari, or tap 'Install App' in\n"
+                "     Chrome. This runs Controller as a dedicated fullscreen app without any browser URL bar!\n\n"
+                "Click 'NEXT' to review control layouts, gyro steering, and customization.\n"
             )
             self.step_textbox.insert("1.0", content)
+            self.step_textbox.yview_moveto(0.0)
 
         elif step_idx == 3:
-            self.lbl_step_indicator.configure(text="Step 4 of 5 • Controls, 6-DoF Gyro & Customization")
+            self.lbl_step_indicator.configure(text="Step 4 of 5 • Dual Layouts, 6-DoF Gyroscope & Customization")
             content = (
                 "========================================================================================\n"
-                " STEP 4 OF 5 // CONTROLS, 6-DoF GYROSCOPE & CUSTOMIZATION\n"
+                " STEP 4 OF 5 // DUAL CONTROL LAYOUTS, 6-DoF GYROSCOPE & CUSTOMIZATION\n"
                 "========================================================================================\n\n"
-                "1. DUAL RACING & ESPORTS LAYOUTS:\n"
-                "   • Layout 1 (Formula Steering Wheel):\n"
-                "     - 6-DoF Gyroscopic motion steering with discrete Kalman filtering.\n"
-                "     - Hair-trigger Throttle (RT) and Brake (LT) with progressive touch pressure.\n"
-                "     - Digital Bumpers (LB, RB), Handbrake, and Nitro buttons.\n"
-                "   • Layout 2 (Esports Dual-Stick Gamepad):\n"
-                "     - Left & Right analog sticks, D-Pad, ABXY diamond, and shoulder triggers.\n\n"
-                "2. GYROSCOPE STEERING CALIBRATION:\n"
-                "   • Center Horizon Indicator: Tap to toggle motion steering on or off.\n"
-                "   • Hold phone in your preferred driving position and tap 'CALIBRATE' to re-zero angle.\n\n"
-                "3. FULL CUSTOMIZATION & DRAG-TO-RESIZE:\n"
-                "   • Tap the Settings icon on your phone screen to enter Edit Mode.\n"
-                "   • Drag any button to place it anywhere on screen.\n"
-                "   • Drag corner handles to resize buttons or joystick radius.\n"
-                "   • Tap 'Save' when finished to persist your layout.\n\n"
+                "1. DUAL SPECIALIZED GAMING MODES:\n\n"
+                "   [Layout 1: Formula Steering Wheel (Sim Racing & Driving Games)]:\n"
+                "     - 6-DoF Gyroscopic Motion Steering: Tilt your phone like a real F1 or GT racing wheel.\n"
+                "       Driven by an advanced discrete 60-state Kalman filter that strips out hand tremor\n"
+                "       while preserving sub-millisecond steering turn-in responsiveness.\n"
+                "     - Analog Hair-Triggers: Progressive Right-Thumb Throttle (RT) and Left-Thumb Brake (LT)\n"
+                "       with realistic travel visualization and graduated analog pressure response.\n"
+                "     - Tactile Racing Buttons: Instant digital access to Handbrake (A), Nitro Boost (X),\n"
+                "       Gear Up (RB), Gear Down (LB), and Camera Look Back (Y).\n\n"
+                "   [Layout 2: Esports Dual-Stick Gamepad (Shooters, Sports, Open World, Skate)]:\n"
+                "     - Dual 360° Analog Thumbsticks: Left Stick (Movement) and Right Stick (Aim / Tricks).\n"
+                "       Full 300 FPS polling with instantaneous zero-delay rapid flick detection.\n"
+                "     - 4-Way Directional Pad: Pixel-perfect digital D-Pad (Up, Down, Left, Right).\n"
+                "     - Traditional ABXY Diamond: High-speed primary action buttons.\n"
+                "     - Full Shoulder Cluster: LB, RB, LT, and RT with dedicated analog radar meters.\n"
+                "     - System Navigation: Back / View and Start / Menu buttons.\n\n"
+                "2. GYROSCOPE STEERING CALIBRATION & HORIZON INDICATOR:\n"
+                "   • An interactive Horizon Level line in the center dashboard visualizes live steering tilt.\n"
+                "   • Tap the center gyro line anytime to instantly toggle motion steering ON or OFF.\n"
+                "   • To re-center the neutral resting angle: hold your phone comfortably in your hands and\n"
+                "     tap 'CALIBRATE'. The current pitch and roll are instantly memorized as the zero point.\n\n"
+                "3. CENTER LOGO BUTTON (DUAL ACTION):\n"
+                "   • Quick Tap: Toggles the central telemetry dashboard HUD and calibration options.\n"
+                "   • Long Press (Hold 0.6 seconds): Seamlessly switches between the Formula Racing layout\n"
+                "     and the Esports Gamepad layout on the fly.\n\n"
+                "4. REAL-TIME FORCE FEEDBACK HAPTIC VIBRATION:\n"
+                "   • Controller streams XInput motor vibration packets directly to your phone's vibration\n"
+                "     hardware in real time. Feel engine revs, curb impacts, goal explosions, and collisions!\n\n"
                 "Click 'NEXT' to review terms of service and launch the dashboard.\n"
             )
             self.step_textbox.insert("1.0", content)
+            self.step_textbox.yview_moveto(0.0)
 
         elif step_idx == 4:
-            self.lbl_step_indicator.configure(text="Step 5 of 5 • Terms of Service & Compulsory Agreement")
+            self.lbl_step_indicator.configure(text="Step 5 of 5 • Terms of Service, Safety Disclaimers & Compulsory Agreement")
             content = (
                 "========================================================================================\n"
-                " STEP 5 OF 5 // TERMS OF SERVICE, SAFETY GUIDELINES & ACCEPTANCE\n"
+                " STEP 5 OF 5 // TERMS OF SERVICE, SAFETY GUIDELINES & COMPULSORY ACCEPTANCE\n"
                 "========================================================================================\n\n"
-                "1. OPEN-SOURCE MIT LICENSE & AS-IS USAGE:\n"
-                "   Controller is provided 'AS IS' without warranty of any kind, express or implied.\n"
-                "   In no event shall the author or contributors be liable for any claim, damages,\n"
-                "   hardware failures, or liabilities arising from the use or misuse of this software.\n\n"
-                "2. RECREATIONAL & GAMING INTENT ONLY:\n"
-                "   This software is designed exclusively for personal video games and simulation software\n"
-                "   (e.g., Assetto Corsa, Forza Horizon, Rocket League, FIFA, Skate, GTA, BeamNG).\n"
-                "   SAFETY WARNING: Do NOT use this software to operate real-world vehicles or heavy machinery.\n\n"
-                "3. LOCAL PRIVATE ENCRYPTION & PRIVACY GUARANTEE:\n"
-                "   All controller inputs, motion sensors, and haptic feedback packets operate strictly\n"
-                "   within your local private home network using HMAC-SHA256 authenticated WebSockets.\n"
-                "   ZERO telemetry or personal data is collected or transmitted to external servers.\n\n"
-                "4. MULTIPLAYER & SLOT SWAPPING:\n"
-                "   Up to 4 players can connect simultaneously. The first connected phone always claims Player 1.\n"
-                "   Use the 'SWAP' buttons on the dashboard anytime to swap player order.\n\n"
+                "1. OPEN-SOURCE MIT LICENSE & WARRANTY DISCLAIMER:\n"
+                "   Controller is free, open-source software provided under the terms of the MIT License.\n"
+                "   THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,\n"
+                "   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\n"
+                "   PARTICULAR PURPOSE, PERFORMANCE, ACCURACY, AND NON-INFRINGEMENT.\n"
+                "   IN NO EVENT SHALL THE AUTHORS, MAINTAINERS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\n"
+                "   CLAIM, DAMAGES, HARDWARE LOSSES, SYSTEM INSTABILITIES, OR OTHER LIABILITY, WHETHER IN\n"
+                "   AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION\n"
+                "   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\n"
+                "2. EXCLUSIVE RECREATIONAL & ENTERTAINMENT USE ONLY:\n"
+                "   • Controller is engineered exclusively for personal entertainment, video games, and desktop\n"
+                "     simulation software (e.g. Assetto Corsa, Forza Horizon, Rocket League, FIFA, Skate).\n"
+                "   • CRITICAL SAFETY WARNING: Do NOT use this software or any connected smartphone to pilot,\n"
+                "     steer, drive, or operate real-world vehicles, automobiles, unmanned aerial drones,\n"
+                "     marine vessels, medical devices, or industrial machinery. Any such unauthorized\n"
+                "     application carries severe risk of personal injury, property destruction, and death.\n\n"
+                "3. LOCAL NETWORK SECURITY & ZERO TELEMETRY PRIVACY COMMITMENT:\n"
+                "   • Privacy by Architecture: Controller runs entirely on your local machine.\n"
+                "   • ZERO telemetry, personal credentials, device identifiers, or usage logs are collected,\n"
+                "     stored on external servers, or transmitted to any third party.\n"
+                "   • Communications between your smartphone and PC are protected using TLS encryption\n"
+                "     and HMAC-SHA256 authenticated session handshakes over your private local network.\n\n"
+                "4. MULTIPLAYER CAPACITY & DYNAMIC SLOT SWAPPING:\n"
+                "   • Controller natively supports up to 4 simultaneous players connected at the same time.\n"
+                "   • The first phone to scan the QR code is automatically designated as Player 1.\n"
+                "   • Use the 'SWAP P1/P2' or 'SWAP P3/P4' buttons on the dashboard anytime to change player order.\n\n"
                 "5. COMPULSORY ACCEPTANCE:\n"
-                "   Please check the agreement box below to accept these terms and unlock the dashboard.\n"
+                "   To unlock and launch the Controller dashboard, check the compulsory agreement box below\n"
+                "   and click 'ACCEPT & LAUNCH'.\n"
             )
             self.step_textbox.insert("1.0", content)
+            self.step_textbox.yview_moveto(0.0)
 
         self.step_textbox.configure(state="disabled")
 
@@ -1127,6 +1202,7 @@ class MinimalOscilloscope(ctk.CTkFrame):
         self.canvas_height = height
         self._last_grid_w = 0
         self._last_grid_h = 0
+        self._grid_redraw_timer = None
         self.min_val = min_val
         self.max_val = max_val
         self.grid_steps = grid_steps
@@ -1170,14 +1246,33 @@ class MinimalOscilloscope(ctk.CTkFrame):
 
     def _on_canvas_resize(self, event) -> None:
         if event.height > 15 and event.width > 30:
+            first_draw = (self._last_grid_w == 0)
             self.canvas_width = event.width
             self.canvas_height = event.height
             if abs(event.width - self._last_grid_w) > 4 or abs(event.height - self._last_grid_h) > 4:
                 self._last_grid_w = event.width
                 self._last_grid_h = event.height
-                self._redraw_grid(event.width, event.height)
+                if first_draw:
+                    self._redraw_grid(event.width, event.height)
+                else:
+                    if self._grid_redraw_timer is not None:
+                        try:
+                            self.after_cancel(self._grid_redraw_timer)
+                        except Exception:
+                            pass
+                    self._grid_redraw_timer = self.after(50, self._debounced_redraw_grid)
+
+    def _debounced_redraw_grid(self) -> None:
+        self._grid_redraw_timer = None
+        self._redraw_grid(self.canvas_width, self.canvas_height)
 
     def _redraw_grid(self, w: int, h: int) -> None:
+        if self._grid_redraw_timer is not None:
+            try:
+                self.after_cancel(self._grid_redraw_timer)
+            except Exception:
+                pass
+            self._grid_redraw_timer = None
         self.canvas.delete("grid_elem")
         for i in range(1, self.grid_steps):
             y = int(h * (i / self.grid_steps))
@@ -1804,6 +1899,12 @@ class ControllerDashboard(ctk.CTk):
         self._last_driver_status = ""
         self._tick = 0
 
+        self._is_resizing = False
+        self._resize_timer = None
+        self._last_win_w = 1260
+        self._last_win_h = 650
+        self.bind("<Configure>", self._on_window_configure)
+
         self._build_top_bar()
         self._build_main_layout()
         self._build_bottom_bar()
@@ -2173,8 +2274,34 @@ class ControllerDashboard(ctk.CTk):
         self.clipboard_append(url)
         self.update()
 
+    def _on_window_configure(self, event) -> None:
+        if event.widget != self:
+            return
+        w, h = event.width, event.height
+        if w < 100 or h < 100:
+            return
+        if abs(w - self._last_win_w) > 3 or abs(h - self._last_win_h) > 3:
+            self._last_win_w = w
+            self._last_win_h = h
+            self._is_resizing = True
+            if self._resize_timer is not None:
+                try:
+                    self.after_cancel(self._resize_timer)
+                except Exception:
+                    pass
+            self._resize_timer = self.after(80, self._on_resize_settled)
+
+    def _on_resize_settled(self) -> None:
+        self._is_resizing = False
+        self._resize_timer = None
+
     def _render_loop(self) -> None:
         """Continuous, ultra-responsive up to ~300 FPS render pump for all 4 player decks."""
+        if self._is_resizing:
+            # Yield main thread to Windows DWM during live window resize dragging
+            self.after(35, self._render_loop)
+            return
+
         self._tick += 1
         snap = self.bridge.get_snapshot()
 

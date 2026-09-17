@@ -342,5 +342,146 @@ def test_splash_screen_morph_and_layout1_guarantee():
     asyncio.run(_test())
 
 
+def test_universal_scaling_gyro_and_customize_removal():
+    async def _test():
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=8107,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+
+        class MockRequest:
+            def __init__(self, path: str):
+                self.path = path
+                self.headers = {"host": "127.0.0.1:8107"}
+
+        # 1. Test index.html contains active gyro and hidden customize HUD
+        resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
+        assert resp_index.status_code == 200
+        text = resp_index.body.decode("utf-8")
+        assert 'class="circle-gyro mod-gyro active"' in text
+        assert 'gyro-horizon-line' in text
+        assert 'id="l1-custom-hud" style="display:none !important;"' in text
+        assert 'id="safe-area-probe"' in text
+
+        # 2. Test cockpit.css contains 907x400 canvas, centered logo & gyro, and hidden customize HUD
+        resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
+        assert resp_css.status_code == 200
+        css = resp_css.body.decode("utf-8")
+        assert "width: 907px" in css
+        assert "height: 400px" in css
+        assert "aspect-ratio: 907 / 400" in css
+        assert ".l1-custom-hud" in css
+        assert "display: none !important;" in css
+        assert "translate(-50%, -50%)" in css
+
+        # 3. Test cockpit.js contains layout1Scale, ResizeObserver, logo hold state, and dynamic joystick radius scaling
+        resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
+        assert resp_js.status_code == 200
+        js = resp_js.body.decode("utf-8")
+        assert "this.layout1Scale" in js
+        assert "scale1 = Math.max(0.1, Math.min(availW / 907, availH / 400))" in js
+        assert "ResizeObserver" in js
+        assert "baseRadius * scale" in js
+        assert "visualViewport" in js
+        assert "_logoHoldState" in js
+
+    asyncio.run(_test())
 
 
+def test_gateway_rumble_websocket_delivery():
+    async def _async_test():
+        test_port = 8115
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+        await server.start()
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+            async with websockets.connect(url) as ws:
+                # 1. Handshake
+                challenge_raw = await ws.recv()
+                challenge = json.loads(challenge_raw)
+                nonce = challenge["nonce"]
+                ts = challenge["timestamp"]
+
+                payload = f"{nonce}:{ts}".encode("utf-8")
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, payload, hashlib.sha256).hexdigest()
+
+                await ws.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "rumble_test_client",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig
+                }))
+
+                auth_raw = await ws.recv()
+                auth = json.loads(auth_raw)
+                assert auth["type"] == "AUTH_SUCCESS"
+
+                # 2. Trigger direct rumble on slot 0
+                server._on_rumble_event(0, 200, 150)
+                msg_raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg = json.loads(msg_raw)
+                assert msg["type"] == "RUMBLE"
+                assert msg["large"] == 200
+                assert msg["small"] == 150
+
+                # 3. Fallback routing: event on slot 1 with only 1 client connected
+                server._on_rumble_event(1, 120, 80)
+                msg2_raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg2 = json.loads(msg2_raw)
+                assert msg2["type"] == "RUMBLE"
+                assert msg2["large"] == 120
+                assert msg2["small"] == 80
+        finally:
+            await server.stop()
+
+    asyncio.run(_async_test())
+
+
+def test_terminal_mode_and_command_handling():
+    import terminal_main
+    terminal_main.setup_console()
+
+    async def _term_test():
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=8119,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+        await server.start()
+        cmd_queue = asyncio.Queue()
+
+        task = asyncio.create_task(terminal_main.handle_terminal_commands(server, cmd_queue))
+
+        try:
+            # Test pulse command
+            await cmd_queue.put("pulse")
+            await asyncio.sleep(0.05)
+
+            # Test test rumble command
+            await cmd_queue.put("test")
+            await asyncio.sleep(0.05)
+
+            # Test swap slots command
+            await cmd_queue.put("swap")
+            await asyncio.sleep(0.05)
+
+            # Test status command
+            await cmd_queue.put("status")
+            await asyncio.sleep(0.05)
+
+            # Test exit command
+            await cmd_queue.put("quit")
+            await asyncio.wait_for(task, timeout=2.0)
+        finally:
+            await server.stop()
+
+    asyncio.run(_term_test())

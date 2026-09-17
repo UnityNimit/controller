@@ -167,13 +167,36 @@ To enable native Xbox 360 gamepad emulation in racing games, run the one-click i
 ```
 *(If omitted, the gateway gracefully operates in SendInput keyboard fallback mode).*
 
-### Step 3: Launch Project Controller Gateway
+### Step 3: Launch Project Controller (Choose Edition)
+
+You can launch Controller using either the Tactical GUI or the Zero-GUI Terminal Edition:
+
+#### Option A: Tactical Telemetry GUI (`Controller.exe`)
 ```powershell
+# In development:
 python main.py
+# Standalone binary:
+.\build\Controller.exe
 ```
-* The dashboard displays the live 4-player HUD, system badges, and **QR Code**.
-* Point your smartphone camera at the QR code or navigate to `https://<HOST_IP>:8443`.
-* Tap **ENGAGE COCKPIT** on the phone to enable motion sensors and audio synthesis.
+* Opens the full CustomTkinter dashboard with live real-time oscilloscopes, visual slot management, pairing QR display, and diagnostics.
+
+#### Option B: Zero-GUI Terminal Edition (`Controller-Terminal.exe`) — Maximum Competitive Performance
+```powershell
+# In development:
+python terminal_main.py
+# Standalone binary:
+.\build\Controller-Terminal.exe
+```
+* **Pure AsyncIO + ViGEmBus driver** with zero GUI threads, zero canvas rendering, and zero UI latency spikes.
+* Features an industrial terminal dashboard with ASCII pairing QR code and interactive keyboard commands:
+  - `s` or `swap`: Atomically swap Player 1 and Player 2 slots.
+  - `t` or `test`: Trigger test vibration on Player 1.
+  - `p` or `pulse`: Pulse button A on Player 1 to register with web gamepad testers.
+  - `status`: Display active connected clients and slot routing.
+  - `q` or `quit`: Clean graceful shutdown.
+
+* Point your smartphone camera at the QR code (displayed in the GUI or terminal) or navigate to `https://<HOST_IP>:8443`.
+* Tap **ENGAGE COCKPIT** on the phone to enable motion sensors, haptics, and low-latency input.
 
 ---
 

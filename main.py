@@ -20,22 +20,6 @@ else:
     BASE_DIR = Path(__file__).resolve().parent
     BUNDLE_DIR = BASE_DIR
 
-# Fast-path CLI argument checks before importing heavy server/GUI dependencies
-if any(arg in sys.argv for arg in ("--version", "-v", "-V")):
-    print("Controller v1.0.0")
-    sys.exit(0)
-
-if any(arg in sys.argv for arg in ("--help", "-h", "/?")):
-    print("Controller v1.0.0 - High-Performance Mobile Gamepad Server\n")
-    print("Usage:")
-    print("  Controller.exe [options]\n")
-    print("Options:")
-    print("  -v, --version    Show application version and exit")
-    print("  -h, --help       Show this help message and exit")
-    print("  --headless       Run gateway server without GUI")
-    print("  --no-gui         Alias for --headless")
-    sys.exit(0)
-
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BUNDLE_DIR))
 
@@ -135,15 +119,35 @@ def start_gui_app():
 
 
 def main():
+    if any(arg in sys.argv for arg in ("--version", "-v", "-V")):
+        print("Controller v1.0.0")
+        sys.exit(0)
+
+    if any(arg in sys.argv for arg in ("--help", "-h", "/?")):
+        print("Controller v1.0.0 - High-Performance Mobile Gamepad Server\n")
+        print("Usage:")
+        print("  Controller.exe [options]\n")
+        print("Options:")
+        print("  -v, --version    Show application version and exit")
+        print("  -h, --help       Show this help message and exit")
+        print("  --headless       Run gateway server without GUI")
+        print("  --no-gui         Alias for --headless")
+        sys.exit(0)
+
     if "--headless" in sys.argv or "--no-gui" in sys.argv:
-        server = ControllerGatewayServer(
-            use_ssl=True,
-            port=8443,
-            enable_simulator=False,
-            force_mock_input=False
-        )
+        from terminal_main import run_terminal_mode
+        port = 8443
+        use_ssl = True
+        if "--no-ssl" in sys.argv:
+            use_ssl = False
+        if "--port" in sys.argv:
+            try:
+                idx = sys.argv.index("--port")
+                port = int(sys.argv[idx + 1])
+            except Exception:
+                pass
         try:
-            asyncio.run(run_server_async(server))
+            asyncio.run(run_terminal_mode(port=port, use_ssl=use_ssl))
         except KeyboardInterrupt:
             print("\nExited.")
     else:

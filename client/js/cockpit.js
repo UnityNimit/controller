@@ -17,11 +17,19 @@ class HapticAudioEngine {
     this.oscSmall = null;
     this.iosSwitch = null;
 
-    // Attach global once-listeners to unlock AudioContext and iOS Taptic on first touch
+    // Attach global once-listeners to unlock AudioContext, iOS Taptic, and Android vibration on first touch
     if (typeof window !== "undefined") {
-      const unlock = () => this.initAudio();
-      window.addEventListener("pointerdown", unlock, { once: true, passive: true });
-      window.addEventListener("touchstart", unlock, { once: true, passive: true });
+      const unlock = () => {
+        this.initAudio();
+        if (this.canVibrate) {
+          try {
+            navigator.vibrate([12]);
+          } catch (_) {}
+        }
+      };
+      window.addEventListener("pointerdown", unlock, { passive: true });
+      window.addEventListener("touchstart", unlock, { passive: true });
+      window.addEventListener("click", unlock, { passive: true });
     }
   }
 
@@ -47,6 +55,8 @@ class HapticAudioEngine {
           sw.type = "checkbox";
           sw.setAttribute("switch", "");
           sw.id = "ios-haptic-switch";
+          sw.tabIndex = -1;
+          sw.setAttribute("aria-hidden", "true");
           sw.style.cssText = "position:fixed;top:-500px;left:-500px;opacity:0.0001;pointer-events:none;z-index:-9999;";
           document.body.appendChild(sw);
         } catch (_) {}
@@ -61,11 +71,11 @@ class HapticAudioEngine {
     if (this.canVibrate) {
       try {
         if (intensity === "heavy") {
-          navigator.vibrate([22]);
+          navigator.vibrate([28]);
         } else if (intensity === "dpad") {
-          navigator.vibrate([14]);
+          navigator.vibrate([18]);
         } else {
-          navigator.vibrate([10]);
+          navigator.vibrate([12]);
         }
       } catch (_) {}
     }
@@ -113,13 +123,13 @@ class HapticAudioEngine {
     // 1. Android & Standard Hardware Motor Vibration
     this._pulseHardwareVibrate(clampedLarge, clampedSmall);
 
-    // 2. iOS Taptic Engine Switch Trigger (iOS 17.4+)
+    // 2. iOS Taptic Engine Switch Trigger (iOS 17.4+ via .click())
     this._triggerIOSTapticSwitch();
 
     // 3. Sub-Bass Physical Acoustic Resonance (deep chassis shake through phone bottom speakers)
     this._triggerAcousticHaptics(clampedLarge, clampedSmall);
 
-    // 4. Cockpit Screen Edge Visual Vibration Vignette
+    // 4. Cockpit Screen Edge Visual Vibration Vignette (Both Layout 1 & 2)
     this._triggerVisualHaptics(clampedLarge, clampedSmall);
 
     // 5. Maintain continuous rumble loop while motors stay on (e.g. goal explosions, burnout)
@@ -129,25 +139,32 @@ class HapticAudioEngine {
   _pulseHardwareVibrate(large, small) {
     if (!this.canVibrate) return;
     const now = performance.now();
-    // Prevent spamming navigator.vibrate faster than once every 65ms to avoid browser rate throttling
-    if (now - this.lastVibrateCallTime < 65) return;
+    // Allow vibration update if >38ms elapsed to keep pace with game engines
+    if (now - this.lastVibrateCallTime < 38) return;
     this.lastVibrateCallTime = now;
 
     const normL = large / 255.0;
     const normS = small / 255.0;
+    const maxNorm = Math.max(normL, normS);
+    if (maxNorm <= 0.02) return;
 
     try {
-      if (normL > 0.45 && normS > 0.45) {
-        // Heavy impact / Goal explosion / Demolition / Curb collision
-        navigator.vibrate([140, 20, 90]);
-      } else if (normL > 0.1) {
-        // Low engine rumble / Acceleration / Off-road surface
-        const dur = Math.round(50 + normL * 90);
+      if (normL > 0.35 && normS > 0.35) {
+        // Heavy combined dual-motor impact / Goal explosion / Demolition / Collision
+        navigator.vibrate([110, 20, 75]);
+      } else if (normL > 0.02 && normS > 0.02) {
+        // Dynamic dual-motor vibration (engine load, curb rumble, off-road)
+        const durL = Math.round(30 + normL * 70);
+        const durS = Math.round(20 + normS * 50);
+        navigator.vibrate([durL, 15, durS]);
+      } else if (normL > 0.02) {
+        // Low-frequency heavy motor only
+        const dur = Math.round(30 + normL * 90);
         navigator.vibrate([dur]);
-      } else if (normS > 0.1) {
-        // High-frequency buzz / Slip / RPM redline / Tire screech
-        const dur = Math.round(25 + normS * 60);
-        navigator.vibrate([dur, 15, dur]);
+      } else if (normS > 0.02) {
+        // High-frequency light motor only (tire slip, redline buzz)
+        const dur = Math.round(20 + normS * 60);
+        navigator.vibrate([dur]);
       }
     } catch (_) {}
   }
@@ -156,8 +173,8 @@ class HapticAudioEngine {
     if (this.rumbleLoopTimer) return;
     this.rumbleLoopTimer = setInterval(() => {
       const now = performance.now();
-      // Watchdog timeout: if no new rumble packet in 650ms, game stopped or paused
-      if (now - this.lastRumbleTime > 650) {
+      // Watchdog timeout: if no new rumble packet in 500ms, game stopped or paused
+      if (now - this.lastRumbleTime > 500) {
         this._stopAllRumble();
         return;
       }
@@ -168,7 +185,7 @@ class HapticAudioEngine {
       } else {
         this._stopAllRumble();
       }
-    }, 130);
+    }, 80);
   }
 
   _stopAllRumble() {
@@ -191,13 +208,17 @@ class HapticAudioEngine {
     this._ensureIOSSwitch();
     if (this.iosSwitch) {
       try {
-        this.iosSwitch.checked = !this.iosSwitch.checked;
+        this.iosSwitch.click();
       } catch (_) {}
     }
   }
 
   _triggerAcousticHaptics(large, small) {
+    if (!this.ctx) this.initAudio();
     if (!this.ctx) return;
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
     try {
       const now = this.ctx.currentTime;
       if (!this.hapticGain) {
@@ -205,17 +226,17 @@ class HapticAudioEngine {
         this.hapticGain.gain.setValueAtTime(0.0001, now);
         this.hapticGain.connect(this.ctx.destination);
 
-        // Sub-bass 55Hz sine wave (Large heavy motor resonance)
+        // Sub-bass 50Hz sine wave (Large heavy motor chassis kinetic resonance)
         this.oscLarge = this.ctx.createOscillator();
         this.oscLarge.type = "sine";
-        this.oscLarge.frequency.setValueAtTime(55, now);
+        this.oscLarge.frequency.setValueAtTime(50, now);
         this.oscLarge.connect(this.hapticGain);
         this.oscLarge.start();
 
-        // 135Hz triangle harmonic (Small light motor resonance)
+        // 115Hz triangle harmonic (Small light motor buzz)
         this.oscSmall = this.ctx.createOscillator();
         this.oscSmall.type = "triangle";
-        this.oscSmall.frequency.setValueAtTime(135, now);
+        this.oscSmall.frequency.setValueAtTime(115, now);
         this.oscSmall.connect(this.hapticGain);
         this.oscSmall.start();
       }
@@ -223,9 +244,9 @@ class HapticAudioEngine {
       const normL = large / 255.0;
       const normS = small / 255.0;
       // Target gain: tactile chassis resonance through smartphone speaker body
-      const targetGain = Math.min(0.75, (normL * 0.48) + (normS * 0.27));
+      const targetGain = Math.min(0.85, (normL * 0.55) + (normS * 0.35));
       this.hapticGain.gain.cancelScheduledValues(now);
-      this.hapticGain.gain.setTargetAtTime(targetGain, now, 0.025);
+      this.hapticGain.gain.setTargetAtTime(targetGain, now, 0.02);
     } catch (_) {}
   }
 
@@ -241,22 +262,19 @@ class HapticAudioEngine {
 
   _triggerVisualHaptics(large, small) {
     if (typeof document === "undefined") return;
-    const frame = document.getElementById("gamepad-frame");
-    if (frame) {
-      if (large > 50 || small > 50) {
-        frame.classList.add("haptic-rumbling");
-      } else {
-        frame.classList.remove("haptic-rumbling");
-      }
-    }
+    const isRumbling = (large > 15 || small > 15);
+    const frame1 = document.getElementById("gamepad-frame");
+    const frame2 = document.getElementById("layout2-frame");
+    if (frame1) frame1.classList.toggle("haptic-rumbling", isRumbling);
+    if (frame2) frame2.classList.toggle("haptic-rumbling", isRumbling);
   }
 
   _stopVisualHaptics() {
     if (typeof document === "undefined") return;
-    const frame = document.getElementById("gamepad-frame");
-    if (frame) {
-      frame.classList.remove("haptic-rumbling");
-    }
+    const frame1 = document.getElementById("gamepad-frame");
+    const frame2 = document.getElementById("layout2-frame");
+    if (frame1) frame1.classList.remove("haptic-rumbling");
+    if (frame2) frame2.classList.remove("haptic-rumbling");
   }
 
   testHapticPulse() {
@@ -430,6 +448,7 @@ class GamepadClient {
 
     // Active Layout Mode (1 = Circular Monochromatic, 2 = Tactical Figma Master)
     this.currentLayout = parseInt(localStorage.getItem("controller_active_layout") || "1", 10);
+    this.layout1Scale = 1.0;
     this.layout2Scale = 1.0;
 
     // Layout 1 Customization Engine
@@ -490,6 +509,17 @@ class GamepadClient {
     // Diagnostics
     this.rtt = 0;
     this._lastSendTime = 0;
+    this.layout1Scale = 1.0;
+    this.layout2Scale = 1.0;
+    this._logoHoldState = {
+      active: false,
+      pointerId: null,
+      startTime: 0,
+      startX: 0,
+      startY: 0,
+      animFrame: null,
+      triggered: false
+    };
 
     this._initDom();
     this._initControls();
@@ -497,7 +527,13 @@ class GamepadClient {
   }
 
   checkOrientation() {
-    const isPortrait = window.innerHeight > window.innerWidth;
+    let vw = window.innerWidth;
+    let vh = window.innerHeight;
+    if (window.visualViewport) {
+      vw = Math.round(window.visualViewport.width);
+      vh = Math.round(window.visualViewport.height);
+    }
+    const isPortrait = vh > vw;
     this.isRotated = isPortrait;
     if (document.body) {
       document.body.classList.toggle("forced-landscape-portrait", isPortrait);
@@ -507,9 +543,13 @@ class GamepadClient {
 
   getGamepadPoint(clientX, clientY) {
     if (this.isRotated) {
+      let vw = window.innerWidth;
+      if (window.visualViewport) {
+        vw = Math.round(window.visualViewport.width);
+      }
       return {
         x: clientY,
-        y: window.innerWidth - clientX
+        y: vw - clientX
       };
     }
     return { x: clientX, y: clientY };
@@ -627,86 +667,89 @@ class GamepadClient {
       window.addEventListener("resize", checkRotationToStart);
     }
 
-    // Center Logo in Layout 1 -> Hold (>=600ms) to Customize/Save, Tap (<600ms) to Switch to Layout 2
+    // Center Logo in Layout 1 -> Tap to Switch to Layout 2, Hold (500ms) to Toggle Customize Mode
     if (this.dom.btnSettingsLogo) {
-      let holdRaf = null;
-
-      const startHoldAnim = () => {
-        if (!this.dom.logoHoldCircle) return;
-        const startTime = performance.now();
-        const duration = 600;
-        const tick = (now) => {
-          const elapsed = now - startTime;
-          const progress = Math.min(1.0, elapsed / duration);
-          const offset = 176 * (1.0 - progress);
-          if (this.dom.logoHoldCircle) {
-            this.dom.logoHoldCircle.style.strokeDashoffset = offset.toString();
-          }
-          if (progress < 1.0 && this.logoHoldTimer) {
-            holdRaf = requestAnimationFrame(tick);
-          }
-        };
-        holdRaf = requestAnimationFrame(tick);
-      };
-
-      const resetHoldAnim = () => {
-        if (holdRaf) {
-          cancelAnimationFrame(holdRaf);
-          holdRaf = null;
+      const cancelHold = () => {
+        if (this._logoHoldState.animFrame) {
+          cancelAnimationFrame(this._logoHoldState.animFrame);
+          this._logoHoldState.animFrame = null;
         }
         if (this.dom.logoHoldCircle) {
           this.dom.logoHoldCircle.style.strokeDashoffset = "176";
         }
+        this._logoHoldState.active = false;
       };
 
       this.dom.btnSettingsLogo.addEventListener("pointerdown", (e) => {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        this.logoHoldTriggered = false;
-        this.logoHoldStart = performance.now();
-        resetHoldAnim();
-        startHoldAnim();
+        e.preventDefault();
+        e.stopPropagation();
 
-        clearTimeout(this.logoHoldTimer);
-        this.logoHoldTimer = setTimeout(() => {
-          this.logoHoldTriggered = true;
-          resetHoldAnim();
-          this.toggleCustomizeMode();
-        }, 600);
+        if (this._logoHoldState.animFrame) {
+          cancelAnimationFrame(this._logoHoldState.animFrame);
+        }
+
+        this._logoHoldState.active = true;
+        this._logoHoldState.pointerId = e.pointerId;
+        this._logoHoldState.startTime = performance.now();
+        this._logoHoldState.startX = e.clientX;
+        this._logoHoldState.startY = e.clientY;
+        this._logoHoldState.triggered = false;
+
+        const animateRing = () => {
+          if (!this._logoHoldState.active) return;
+          const elapsed = performance.now() - this._logoHoldState.startTime;
+          const progress = Math.min(1.0, elapsed / 500);
+
+          if (this.dom.logoHoldCircle) {
+            const offset = (176 * (1.0 - progress)).toFixed(2);
+            this.dom.logoHoldCircle.style.strokeDashoffset = offset;
+          }
+
+          if (progress >= 1.0) {
+            this._logoHoldState.triggered = true;
+            this._logoHoldState.active = false;
+            if (this.dom.logoHoldCircle) {
+              this.dom.logoHoldCircle.style.strokeDashoffset = "0";
+            }
+            this.haptics.triggerClick("heavy");
+            this.toggleCustomizeMode();
+            return;
+          }
+
+          this._logoHoldState.animFrame = requestAnimationFrame(animateRing);
+        };
+
+        this._logoHoldState.animFrame = requestAnimationFrame(animateRing);
       }, { passive: false });
 
-      const handleLogoUp = (e) => {
-        if (this.logoHoldTimer) {
-          clearTimeout(this.logoHoldTimer);
-          this.logoHoldTimer = null;
+      this.dom.btnSettingsLogo.addEventListener("pointermove", (e) => {
+        if (!this._logoHoldState.active) return;
+        const dist = Math.hypot(e.clientX - this._logoHoldState.startX, e.clientY - this._logoHoldState.startY);
+        if (dist > 18) {
+          cancelHold();
         }
-        resetHoldAnim();
-
-        if (this.logoHoldTriggered) {
-          if (e) { e.preventDefault(); e.stopPropagation(); }
-          return;
-        }
-
-        // Quick Tap (< 600ms)
-        const pressDuration = performance.now() - (this.logoHoldStart || 0);
-        if (pressDuration < 600) {
-          if (e) { e.preventDefault(); e.stopPropagation(); }
-          if (!this.isCustomizingLayout1) {
-            this.switchLayout(2);
-          }
-        }
-      };
-
-      this.dom.btnSettingsLogo.addEventListener("pointerup", handleLogoUp);
-      this.dom.btnSettingsLogo.addEventListener("pointercancel", () => {
-        if (this.logoHoldTimer) {
-          clearTimeout(this.logoHoldTimer);
-          this.logoHoldTimer = null;
-        }
-        resetHoldAnim();
       });
 
+      this.dom.btnSettingsLogo.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const wasActive = this._logoHoldState.active;
+        const wasTriggered = this._logoHoldState.triggered;
+        const elapsed = performance.now() - this._logoHoldState.startTime;
+
+        cancelHold();
+
+        if (wasActive && !wasTriggered && elapsed < 450) {
+          this.switchLayout(2);
+        }
+      });
+
+      this.dom.btnSettingsLogo.addEventListener("pointercancel", cancelHold);
+      this.dom.btnSettingsLogo.addEventListener("pointerleave", cancelHold);
       this.dom.btnSettingsLogo.addEventListener("click", (e) => {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
+        e.preventDefault();
+        e.stopPropagation();
       });
     }
 
@@ -715,16 +758,31 @@ class GamepadClient {
     // Center Logo in Layout 2 -> Tap to switch to Layout 1
     const l2Logo = document.getElementById("l2-btn-settings-logo");
     if (l2Logo) {
-      let lastL2Tap = 0;
-      const handleL2Tap = (e) => {
-        const now = performance.now();
-        if (now - lastL2Tap < 250) return;
-        lastL2Tap = now;
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        this.switchLayout(1);
-      };
-      l2Logo.addEventListener("click", handleL2Tap);
-      l2Logo.addEventListener("pointerdown", handleL2Tap);
+      let l2DownTime = 0;
+      let l2StartX = 0, l2StartY = 0;
+      l2Logo.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        l2DownTime = performance.now();
+        l2StartX = e.clientX;
+        l2StartY = e.clientY;
+      }, { passive: false });
+
+      l2Logo.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dist = Math.hypot(e.clientX - l2StartX, e.clientY - l2StartY);
+        const elapsed = performance.now() - l2DownTime;
+        l2DownTime = 0;
+        if (dist < 18 && elapsed < 450) {
+          this.switchLayout(1);
+        }
+      });
+
+      l2Logo.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
     }
 
     // Touchpad in Layout 2 -> Toggle Gyroscope
@@ -745,6 +803,14 @@ class GamepadClient {
     // Initialize layout visibility & scale
     this.switchLayout(this.currentLayout, false);
 
+    // Synchronize initial Gyroscope DOM state (Enabled by default)
+    if (this.dom.modGyro) {
+      this.dom.modGyro.classList.toggle("active", this.gyroEnabled);
+    }
+    if (this.dom.gyroHorizonLine) {
+      this.dom.gyroHorizonLine.style.display = this.gyroEnabled ? "block" : "none";
+    }
+
     // Gyroscope toggle (Tap to turn on/off and show/hide center line)
     if (this.dom.modGyro) {
       let lastGyroTap = 0;
@@ -760,6 +826,16 @@ class GamepadClient {
       };
       this.dom.modGyro.addEventListener("click", handleGyroTap);
       this.dom.modGyro.addEventListener("pointerdown", handleGyroTap);
+    }
+
+    // Responsive real-time container observer
+    if (typeof ResizeObserver !== "undefined" && this.dom.app) {
+      try {
+        const ro = new ResizeObserver(() => {
+          this.updateLayoutScaling();
+        });
+        ro.observe(this.dom.app);
+      } catch (_) {}
     }
   }
 
@@ -785,32 +861,102 @@ class GamepadClient {
     } else {
       if (layout1Frame) layout1Frame.style.display = "block";
       if (layout2Wrapper) layout2Wrapper.style.display = "none";
+      this.updateLayoutScaling();
+      if (typeof requestAnimationFrame !== "undefined") {
+        requestAnimationFrame(() => this.updateLayoutScaling());
+      }
+      setTimeout(() => this.updateLayoutScaling(), 50);
+      setTimeout(() => this.updateLayoutScaling(), 150);
     }
 
     this._refreshButtonElements();
   }
 
   updateLayoutScaling() {
+    const l1Frame = document.getElementById("gamepad-frame");
     const l2Frame = document.getElementById("layout2-frame");
-    const l2Wrapper = document.getElementById("layout2-wrapper");
-    if (!l2Frame) return;
+    const app = document.getElementById("controller-app");
 
-    let availW = window.innerWidth;
-    let availH = window.innerHeight;
-
-    if (this.isRotated) {
-      availW = window.innerHeight;
-      availH = window.innerWidth;
+    let vw = window.innerWidth;
+    let vh = window.innerHeight;
+    if (window.visualViewport) {
+      vw = Math.round(window.visualViewport.width);
+      vh = Math.round(window.visualViewport.height);
     }
 
-    if (l2Wrapper && l2Wrapper.clientWidth > 50 && l2Wrapper.clientHeight > 50) {
-      availW = l2Wrapper.clientWidth;
-      availH = l2Wrapper.clientHeight;
+    const isPortrait = vh > vw;
+    this.isRotated = isPortrait;
+    if (document.body) {
+      document.body.classList.toggle("forced-landscape-portrait", isPortrait);
     }
 
-    const scale = Math.max(0.1, Math.min(availW / 2048, availH / 868));
-    this.layout2Scale = scale || 1.0;
-    l2Frame.style.transform = `scale(${scale})`;
+    // Read device safe area insets (notches, Dynamic Islands, Safari navigation bars)
+    let safeTop = 0, safeBottom = 0, safeLeft = 0, safeRight = 0;
+    const probe = document.getElementById("safe-area-probe");
+    if (probe) {
+      const cs = window.getComputedStyle(probe);
+      safeTop = parseFloat(cs.paddingTop) || 0;
+      safeBottom = parseFloat(cs.paddingBottom) || 0;
+      safeLeft = parseFloat(cs.paddingLeft) || 0;
+      safeRight = parseFloat(cs.paddingRight) || 0;
+    }
+
+    let usableW, usableH;
+
+    if (isPortrait) {
+      // Rotated 90 degrees clockwise for portrait mobile
+      usableW = Math.max(100, vh - safeTop - safeBottom);
+      usableH = Math.max(100, vw - safeLeft - safeRight);
+
+      if (app) {
+        app.style.position = "fixed";
+        app.style.top = "0px";
+        app.style.left = "0px";
+        app.style.width = `${vh}px`;
+        app.style.height = `${vw}px`;
+        app.style.transformOrigin = "0 0";
+        app.style.transform = `rotate(90deg) translateY(-${vw}px)`;
+        app.style.overflow = "hidden";
+      }
+    } else {
+      // Natural landscape orientation (Android, landscape iOS, tablets, desktop)
+      usableW = Math.max(100, vw - safeLeft - safeRight);
+      usableH = Math.max(100, vh - safeTop - safeBottom);
+
+      if (app) {
+        app.style.position = "fixed";
+        app.style.top = "0px";
+        app.style.left = "0px";
+        app.style.width = `${vw}px`;
+        app.style.height = `${vh}px`;
+        app.style.transformOrigin = "center center";
+        app.style.transform = "none";
+        app.style.overflow = "hidden";
+      }
+    }
+
+    const availW = usableW;
+    const availH = usableH;
+
+    // Scale Layout 1 to fit available viewport exactly with zero clipping
+    if (l1Frame) {
+      const scale1 = Math.max(0.1, Math.min(availW / 907, availH / 400));
+      this.layout1Scale = scale1 || 1.0;
+      l1Frame.style.position = "absolute";
+      l1Frame.style.left = "50%";
+      l1Frame.style.top = "50%";
+      l1Frame.style.transform = `translate(-50%, -50%) scale(${scale1})`;
+    }
+
+    // Scale Layout 2 to fit available viewport exactly
+    if (l2Frame) {
+      const scale2 = Math.max(0.1, Math.min(availW / 2048, availH / 868));
+      this.layout2Scale = scale2 || 1.0;
+      l2Frame.style.position = "absolute";
+      l2Frame.style.left = "50%";
+      l2Frame.style.top = "50%";
+      l2Frame.style.transform = `translate(-50%, -50%) scale(${scale2})`;
+    }
   }
 
   _refreshButtonElements() {
@@ -871,7 +1017,14 @@ class GamepadClient {
         }
       }
     } catch (_) {}
-    window.scrollTo(0, 1);
+    window.scrollTo(0, 0);
+    setTimeout(() => {
+      window.scrollTo(0, 1);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        this.checkOrientation();
+      }, 50);
+    }, 50);
   }
 
   async lockOrientationLandscape() {
@@ -883,6 +1036,9 @@ class GamepadClient {
       }
     } catch (_) {}
     this.checkOrientation();
+    setTimeout(() => this.checkOrientation(), 100);
+    setTimeout(() => this.checkOrientation(), 300);
+    setTimeout(() => this.checkOrientation(), 600);
   }
 
   async engage() {
@@ -1535,7 +1691,9 @@ class GamepadClient {
     const center = this.getGamepadCenter(baseEl);
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
-    const maxRadius = isL2 ? 65 : (this.customStickRadius ? (this.customStickRadius.left || 40) : 40);
+    const scale = isL2 ? (this.layout2Scale || 1.0) : (this.layout1Scale || 1.0);
+    const baseRadius = isL2 ? 65 : (this.customStickRadius ? (this.customStickRadius.left || 40) : 40);
+    const maxRadius = baseRadius * scale;
     const dist = Math.hypot(dx, dy);
 
     let visualDx = dx;
@@ -1544,7 +1702,6 @@ class GamepadClient {
       visualDx = (dx / dist) * maxRadius;
       visualDy = (dy / dist) * maxRadius;
     }
-    const scale = isL2 ? (this.layout2Scale || 1.0) : 1.0;
     const localDx = visualDx / scale;
     const localDy = visualDy / scale;
     if (puckEl) {
@@ -1578,7 +1735,9 @@ class GamepadClient {
     const center = this.getGamepadCenter(baseEl);
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
-    const maxRadius = isL2 ? 55 : (this.customStickRadius ? (this.customStickRadius.right || 40) : 40);
+    const scale = isL2 ? (this.layout2Scale || 1.0) : (this.layout1Scale || 1.0);
+    const baseRadius = isL2 ? 55 : (this.customStickRadius ? (this.customStickRadius.right || 40) : 40);
+    const maxRadius = baseRadius * scale;
     const dist = Math.hypot(dx, dy);
 
     if (dist > 5) {
@@ -1591,7 +1750,6 @@ class GamepadClient {
       visualDx = (dx / dist) * maxRadius;
       visualDy = (dy / dist) * maxRadius;
     }
-    const scale = isL2 ? (this.layout2Scale || 1.0) : 1.0;
     const localDx = visualDx / scale;
     const localDy = visualDy / scale;
     if (puckEl) {
@@ -2088,8 +2246,20 @@ window.addEventListener("DOMContentLoaded", () => {
     if (window.gamepadClient) window.gamepadClient.checkOrientation();
   });
   window.addEventListener("orientationchange", () => {
-    if (window.gamepadClient) window.gamepadClient.checkOrientation();
+    if (window.gamepadClient) {
+      window.gamepadClient.checkOrientation();
+      setTimeout(() => window.gamepadClient && window.gamepadClient.checkOrientation(), 100);
+      setTimeout(() => window.gamepadClient && window.gamepadClient.checkOrientation(), 300);
+    }
   });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      if (window.gamepadClient) window.gamepadClient.checkOrientation();
+    });
+    window.visualViewport.addEventListener("scroll", () => {
+      if (window.gamepadClient) window.gamepadClient.checkOrientation();
+    });
+  }
   window.addEventListener("pointerdown", () => {
     if (window.gamepadClient && window.gamepadClient._isEngaged) {
       window.gamepadClient.toggleFullscreen();

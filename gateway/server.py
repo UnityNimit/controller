@@ -228,6 +228,8 @@ class ControllerGatewayServer:
         self.input_manager.set_rumble_callback(self._on_rumble_event)
         if self.bridge is not None:
             self.bridge.swap_slots_callback = self.swap_player_slots
+            self.bridge.trigger_test_rumble_callback = self.trigger_test_rumble
+            self.bridge.pulse_test_callback = self.pulse_test_slot
 
         # Telemetry State
         self.latest_telemetry: Dict[str, Any] = {
@@ -515,7 +517,7 @@ class ControllerGatewayServer:
     async def _send_safe(self, ws, msg: str) -> None:
         """Helper to send a message over a websocket ignoring closed socket errors."""
         try:
-            if ws and not ws.closed:
+            if ws is not None:
                 await ws.send(msg)
         except Exception:
             pass
@@ -535,19 +537,50 @@ class ControllerGatewayServer:
         if not self._running or getattr(self, "loop", None) is None:
             return
 
+        msg = json.dumps({
+            "type": "RUMBLE",
+            "large": lm,
+            "small": sm
+        })
+
+        # 1. Direct slot targeting
+        target_ws = None
         if 0 <= slot_idx < len(self.input_manager.slots):
             cid = self.input_manager.slots[slot_idx]
             if cid and cid in self.client_sockets:
-                ws = self.client_sockets[cid]
-                msg = json.dumps({
-                    "type": "RUMBLE",
-                    "large": lm,
-                    "small": sm
-                })
-                try:
-                    asyncio.run_coroutine_threadsafe(self._send_safe(ws, msg), self.loop)
-                except Exception as e:
-                    logger.debug(f"Rumble websocket dispatch error: {e}")
+                target_ws = self.client_sockets[cid]
+
+        # 2. Single-player fallback: if only 1 mobile client is active on the server,
+        # route any gamepad rumble to that client (handles games/testers targeting slot 0 or slot 1)
+        if target_ws is None:
+            active_sockets = [
+                ws for cid, ws in self.client_sockets.items()
+                if ws and cid in self.input_manager.slots
+            ]
+            if len(active_sockets) == 1:
+                target_ws = active_sockets[0]
+
+        if target_ws is not None:
+            try:
+                asyncio.run_coroutine_threadsafe(self._send_safe(target_ws, msg), self.loop)
+            except Exception as e:
+                logger.debug(f"Rumble websocket dispatch error: {e}")
+
+    def pulse_test_slot(self, slot_idx: int) -> None:
+        """Pulses button A momentarily on the virtual controller to wake up browser gamepad testers."""
+        import threading
+        def _pulse():
+            try:
+                if 0 <= slot_idx < len(self.input_manager.controllers):
+                    ctrl = self.input_manager.controllers[slot_idx]
+                    ctrl.set_button("A", True)
+                    ctrl.update()
+                    time.sleep(0.12)
+                    ctrl.set_button("A", False)
+                    ctrl.update()
+            except Exception as e:
+                logger.debug(f"Pulse test slot error: {e}")
+        threading.Thread(target=_pulse, daemon=True, name=f"PulseTest-Slot{slot_idx+1}").start()
 
     def trigger_test_rumble(self, slot_idx: int = 0, large: int = 255, small: int = 255, duration_sec: float = 0.4) -> None:
         """Sends a high-intensity force-feedback rumble pulse to the specified slot for hardware verification."""
