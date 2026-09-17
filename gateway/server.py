@@ -223,6 +223,9 @@ class ControllerGatewayServer:
         self.active_clients: Dict[WebSocketServerProtocol, str] = {}
         # Active client sockets mapped by client_id {client_id: websocket}
         self.client_sockets: Dict[str, WebSocketServerProtocol] = {}
+        # Active motor rumble state per slot {slot_idx: (large, small)}
+        self._active_rumble: Dict[int, Tuple[int, int]] = {}
+        self._rumble_sync_counter: int = 0
 
         # Set up bi-directional rumble callback from OS virtual gamepads
         self.input_manager.set_rumble_callback(self._on_rumble_event)
@@ -324,11 +327,26 @@ class ControllerGatewayServer:
         player_slot: Optional[int] = None
 
         try:
-            # Wait for AUTH_RESPONSE
-            response_raw = await asyncio.wait_for(websocket.recv(), timeout=settings.security.HANDSHAKE_TIMEOUT_SEC)
-            msg = json.loads(response_raw)
-            
-            if msg.get("type") != "AUTH_RESPONSE":
+            # Wait for AUTH_RESPONSE (skipping any stray binary packets or non-auth frames)
+            msg = None
+            start_wait = time.time()
+            while time.time() - start_wait < settings.security.HANDSHAKE_TIMEOUT_SEC:
+                response_raw = await asyncio.wait_for(
+                    websocket.recv(),
+                    timeout=max(0.1, settings.security.HANDSHAKE_TIMEOUT_SEC - (time.time() - start_wait))
+                )
+                if isinstance(response_raw, bytes):
+                    # Client sent a binary frame before handshake completed; skip it
+                    continue
+                try:
+                    parsed = json.loads(response_raw)
+                    if isinstance(parsed, dict) and parsed.get("type") == "AUTH_RESPONSE":
+                        msg = parsed
+                        break
+                except Exception:
+                    continue
+
+            if not msg or msg.get("type") != "AUTH_RESPONSE":
                 await websocket.send(json.dumps({"type": "AUTH_ERROR", "reason": "PROTOCOL_VIOLATION"}))
                 await websocket.close(1008, "Expected AUTH_RESPONSE")
                 return
@@ -381,6 +399,9 @@ class ControllerGatewayServer:
             logger.info(f"Client [{client_id[:8]}] authenticated successfully -> Player {player_slot + 1}")
             if self.bridge is not None:
                 self.bridge.register_client(player_slot, client_id, client_ip)
+
+            # Wake up browser gamepad testers (e.g. gamepad-tester.com) and OS XInput stack
+            self.pulse_test_slot(player_slot)
 
             # Phase 3: Telemetry Uplink Processing Loop
             async for message in websocket:
@@ -456,6 +477,10 @@ class ControllerGatewayServer:
                         "brake": br_byte,
                         "buttons": buttons
                     }
+                    # Safety check: if slot was somehow lost during a reconnect race, re-acquire it
+                    if self.input_manager.get_slot(client_id) is None:
+                        self.input_manager.allocate_slot(client_id, preferred_slot=player_slot)
+
                     self.input_manager.dispatch(client_id, control_state)
 
                     # Record to QoS Flight Data Buffer
@@ -507,12 +532,14 @@ class ControllerGatewayServer:
             if client_id:
                 if self.client_sockets.get(client_id) == websocket:
                     self.client_sockets.pop(client_id, None)
-                slot = self.input_manager.release_slot(client_id)
-                if self.bridge is not None and slot is not None:
-                    self.bridge.unregister_client(slot, client_id)
-                self.pipelines.pop(client_id, None)
-                self.firewall.reset_client(client_id)
-                logger.info(f"Cleaned up session for client [{client_id[:8]}]")
+                    slot = self.input_manager.release_slot(client_id)
+                    if self.bridge is not None and slot is not None:
+                        self.bridge.unregister_client(slot, client_id)
+                    self.pipelines.pop(client_id, None)
+                    self.firewall.reset_client(client_id)
+                    logger.info(f"Cleaned up session for client [{client_id[:8]}]")
+                else:
+                    logger.info(f"Stale connection closed for client [{client_id[:8]}]; active connection preserved")
 
     async def _send_safe(self, ws, msg: str) -> None:
         """Helper to send a message over a websocket ignoring closed socket errors."""
@@ -522,11 +549,31 @@ class ControllerGatewayServer:
         except Exception:
             pass
 
+    def _resolve_target_ws_for_slot(self, slot_idx: int) -> Optional[Any]:
+        """Resolves target WebSocket for a slot with single-player fallback routing."""
+        # 1. Direct slot targeting
+        if 0 <= slot_idx < len(self.input_manager.slots):
+            cid = self.input_manager.slots[slot_idx]
+            if cid and cid in self.client_sockets:
+                return self.client_sockets[cid]
+
+        # 2. Single-player fallback: if only 1 mobile client is active on the server,
+        # route any gamepad rumble to that client (handles games/testers targeting slot 0 or slot 1)
+        active_sockets = [
+            ws for cid, ws in self.client_sockets.items()
+            if ws and cid in self.input_manager.slots
+        ]
+        if len(active_sockets) == 1:
+            return active_sockets[0]
+        return None
+
     def _on_rumble_event(self, slot_idx: int, large_motor: int, small_motor: int) -> None:
         """Invoked by OS virtual gamepad when game engine sends XInput force-feedback."""
         # Standardize motor speed to standard 0..255 byte range
         lm = max(0, min(255, int(large_motor) if large_motor <= 255 else int(large_motor // 256)))
         sm = max(0, min(255, int(small_motor) if small_motor <= 255 else int(small_motor // 256)))
+
+        self._active_rumble[slot_idx] = (lm, sm)
 
         if self.bridge is not None:
             try:
@@ -543,26 +590,19 @@ class ControllerGatewayServer:
             "small": sm
         })
 
-        # 1. Direct slot targeting
-        target_ws = None
-        if 0 <= slot_idx < len(self.input_manager.slots):
-            cid = self.input_manager.slots[slot_idx]
-            if cid and cid in self.client_sockets:
-                target_ws = self.client_sockets[cid]
-
-        # 2. Single-player fallback: if only 1 mobile client is active on the server,
-        # route any gamepad rumble to that client (handles games/testers targeting slot 0 or slot 1)
-        if target_ws is None:
-            active_sockets = [
-                ws for cid, ws in self.client_sockets.items()
-                if ws and cid in self.input_manager.slots
-            ]
-            if len(active_sockets) == 1:
-                target_ws = active_sockets[0]
-
+        target_ws = self._resolve_target_ws_for_slot(slot_idx)
         if target_ws is not None:
             try:
                 asyncio.run_coroutine_threadsafe(self._send_safe(target_ws, msg), self.loop)
+                # If motors stopped (0, 0), send a follow-up confirmation after 25ms to ensure 100% arrival over Wi-Fi
+                if lm == 0 and sm == 0:
+                    import threading
+                    def _backup_stop():
+                        try:
+                            asyncio.run_coroutine_threadsafe(self._send_safe(target_ws, msg), self.loop)
+                        except Exception:
+                            pass
+                    threading.Timer(0.025, _backup_stop).start()
             except Exception as e:
                 logger.debug(f"Rumble websocket dispatch error: {e}")
 
@@ -582,13 +622,14 @@ class ControllerGatewayServer:
                 logger.debug(f"Pulse test slot error: {e}")
         threading.Thread(target=_pulse, daemon=True, name=f"PulseTest-Slot{slot_idx+1}").start()
 
-    def trigger_test_rumble(self, slot_idx: int = 0, large: int = 255, small: int = 255, duration_sec: float = 0.4) -> None:
+    def trigger_test_rumble(self, slot_idx: int = 0, large: int = 255, small: int = 255, duration_sec: float = 1.5) -> None:
         """Sends a high-intensity force-feedback rumble pulse to the specified slot for hardware verification."""
         import threading
         def _test_pulse():
             self._on_rumble_event(slot_idx, large, small)
-            time.sleep(duration_sec)
-            self._on_rumble_event(slot_idx, 0, 0)
+            if duration_sec > 0:
+                time.sleep(duration_sec)
+                self._on_rumble_event(slot_idx, 0, 0)
         threading.Thread(target=_test_pulse, daemon=True, name=f"TestRumble-P{slot_idx+1}").start()
 
     def swap_player_slots(self, slot_a: int, slot_b: int) -> bool:
@@ -659,6 +700,20 @@ class ControllerGatewayServer:
 
                 for ws in websockets_to_remove:
                     self.active_clients.pop(ws, None)
+
+            # Periodic 2Hz state sync for active rumble motors (maintains 100% sync for 5s, 10s, infinite rumble)
+            rumble_sync_counter = getattr(self, "_rumble_sync_counter", 0) + 1
+            self._rumble_sync_counter = rumble_sync_counter
+            if rumble_sync_counter % 30 == 0:
+                for s_idx, (r_lm, r_sm) in list(self._active_rumble.items()):
+                    if r_lm > 0 or r_sm > 0:
+                        t_ws = self._resolve_target_ws_for_slot(s_idx)
+                        if t_ws is not None:
+                            r_msg = json.dumps({"type": "RUMBLE", "large": r_lm, "small": r_sm})
+                            try:
+                                await self._send_safe(t_ws, r_msg)
+                            except Exception:
+                                pass
 
             elapsed = time.perf_counter() - start_t
             await asyncio.sleep(max(0.001, interval - elapsed))

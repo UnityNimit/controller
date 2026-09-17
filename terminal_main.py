@@ -65,9 +65,26 @@ async def handle_terminal_commands(server: ControllerGatewayServer, cmd_queue: a
                     print("[*] Successfully swapped Player 1 and Player 2 slots!")
                 else:
                     print("[!] Failed to swap slots.")
-            elif cmd_lower in ("t", "test"):
-                print("[*] Triggering test rumble pulse (400ms) on Player 1...")
-                server.trigger_test_rumble(0, large=255, small=255, duration_sec=0.4)
+            elif cmd_lower.startswith("t") or cmd_lower.startswith("test"):
+                parts = cmd_lower.split()
+                dur = 1.5
+                if len(parts) > 1:
+                    try:
+                        dur = float(parts[1])
+                    except ValueError:
+                        pass
+                if "stop" in cmd_lower or (len(parts) > 1 and parts[1] == "0"):
+                    print("[*] Stopping rumble on Player 1...")
+                    server._on_rumble_event(0, 0, 0)
+                elif "inf" in cmd_lower:
+                    print("[*] Starting continuous infinite rumble on Player 1 (type 'stop' to stop)...")
+                    server.trigger_test_rumble(0, large=255, small=255, duration_sec=-1)
+                else:
+                    print(f"[*] Triggering maximum-effect rumble pulse ({dur}s) on Player 1...")
+                    server.trigger_test_rumble(0, large=255, small=255, duration_sec=dur)
+            elif cmd_lower in ("stop", "off"):
+                print("[*] Stopping rumble on Player 1...")
+                server._on_rumble_event(0, 0, 0)
             elif cmd_lower in ("p", "pulse"):
                 print("[*] Pulsing button 'A' on Player 1 to register with gamepad tester...")
                 server.pulse_test_slot(0)
@@ -81,11 +98,12 @@ async def handle_terminal_commands(server: ControllerGatewayServer, cmd_queue: a
                 print("-" * 50 + "\n")
             elif cmd_lower in ("h", "help"):
                 print("\nAvailable Commands:")
-                print("  s, swap   - Swap Player 1 and Player 2")
-                print("  t, test   - Trigger test vibration on Player 1")
-                print("  p, pulse  - Pulse button A on Player 1")
-                print("  status    - Show active player slots")
-                print("  q, quit   - Gracefully shutdown\n")
+                print("  s, swap        - Swap Player 1 and Player 2")
+                print("  t, test [sec]  - Trigger vibration (e.g. 't', 't 5', 't 10', 't inf')")
+                print("  stop           - Immediately stop active vibration")
+                print("  p, pulse       - Pulse button A on Player 1 to register tester")
+                print("  status         - Show active player slots")
+                print("  q, quit        - Gracefully shutdown\n")
             else:
                 print(f"[?] Unknown command '{cmd}'. Type 'help' for available commands.")
         except asyncio.CancelledError:

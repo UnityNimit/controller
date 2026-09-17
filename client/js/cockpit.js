@@ -111,86 +111,70 @@ class HapticAudioEngine {
     const clampedLarge = Math.max(0, Math.min(255, large));
     const clampedSmall = Math.max(0, Math.min(255, small));
 
+    const wasActive = (this.currentLarge > 0 || this.currentSmall > 0);
+    const isNowActive = (clampedLarge > 0 || clampedSmall > 0);
+
     this.currentLarge = clampedLarge;
     this.currentSmall = clampedSmall;
     this.lastRumbleTime = performance.now();
 
-    if (clampedLarge === 0 && clampedSmall === 0) {
+    // Motor OFF command received from game engine / XInput
+    if (!isNowActive) {
       this._stopAllRumble();
       return;
     }
 
-    // 1. Android & Standard Hardware Motor Vibration
-    this._pulseHardwareVibrate(clampedLarge, clampedSmall);
+    // Motor ON: Smooth, accurate, continuous vibration
+    // Only re-trigger hardware vibration on transition from OFF, or if existing pulse is nearing expiry (> 1200ms)
+    // This prevents Android Chrome from cancelling and re-starting the motor 60 times a second, which causes glitching/stutter
+    const now = performance.now();
+    if (!wasActive || (now - (this._lastHardwareVibrateTime || 0)) > 1200) {
+      this._startHardwareVibrate(clampedLarge, clampedSmall);
+      this._lastHardwareVibrateTime = now;
+      if (!wasActive) {
+        this._triggerIOSTapticSwitch();
+      }
+    }
 
-    // 2. iOS Taptic Engine Switch Trigger (iOS 17.4+ via .click())
-    this._triggerIOSTapticSwitch();
-
-    // 3. Sub-Bass Physical Acoustic Resonance (deep chassis shake through phone bottom speakers)
     this._triggerAcousticHaptics(clampedLarge, clampedSmall);
-
-    // 4. Cockpit Screen Edge Visual Vibration Vignette (Both Layout 1 & 2)
     this._triggerVisualHaptics(clampedLarge, clampedSmall);
 
-    // 5. Maintain continuous rumble loop while motors stay on (e.g. goal explosions, burnout)
+    // Keep active vibration armed continuously for any duration (1s, 5s, 10s, infinite)
     this._ensureRumbleLoop();
   }
 
-  _pulseHardwareVibrate(large, small) {
+  _startHardwareVibrate(large, small) {
     if (!this.canVibrate) return;
-    const now = performance.now();
-    // Allow vibration update if >38ms elapsed to keep pace with game engines
-    if (now - this.lastVibrateCallTime < 38) return;
-    this.lastVibrateCallTime = now;
-
-    const normL = large / 255.0;
-    const normS = small / 255.0;
-    const maxNorm = Math.max(normL, normS);
-    if (maxNorm <= 0.02) return;
-
     try {
-      if (normL > 0.35 && normS > 0.35) {
-        // Heavy combined dual-motor impact / Goal explosion / Demolition / Collision
-        navigator.vibrate([110, 20, 75]);
-      } else if (normL > 0.02 && normS > 0.02) {
-        // Dynamic dual-motor vibration (engine load, curb rumble, off-road)
-        const durL = Math.round(30 + normL * 70);
-        const durS = Math.round(20 + normS * 50);
-        navigator.vibrate([durL, 15, durS]);
-      } else if (normL > 0.02) {
-        // Low-frequency heavy motor only
-        const dur = Math.round(30 + normL * 90);
-        navigator.vibrate([dur]);
-      } else if (normS > 0.02) {
-        // High-frequency light motor only (tire slip, redline buzz)
-        const dur = Math.round(20 + normS * 60);
-        navigator.vibrate([dur]);
-      }
+      // Solid uninterrupted vibration block (2000ms) seamlessly maintained by keep-alive loop
+      navigator.vibrate(2000);
     } catch (_) {}
   }
 
   _ensureRumbleLoop() {
     if (this.rumbleLoopTimer) return;
+    // Seamless keep-alive loop: re-arms hardware vibration every 1000ms (buffer = 1000ms, zero dead-time)
     this.rumbleLoopTimer = setInterval(() => {
       const now = performance.now();
-      // Watchdog timeout: if no new rumble packet in 500ms, game stopped or paused
-      if (now - this.lastRumbleTime > 500) {
+      // Safety fail-safe: auto-stop after 4000ms of complete radio silence from host PC
+      if (now - this.lastRumbleTime > 4000) {
         this._stopAllRumble();
         return;
       }
+
       if (this.currentLarge > 0 || this.currentSmall > 0) {
-        this._pulseHardwareVibrate(this.currentLarge, this.currentSmall);
-        this._triggerIOSTapticSwitch();
-        this._triggerAcousticHaptics(this.currentLarge, this.currentSmall);
+        this._startHardwareVibrate(this.currentLarge, this.currentSmall);
+        this._lastHardwareVibrateTime = now;
       } else {
         this._stopAllRumble();
       }
-    }, 80);
+    }, 1000);
   }
 
   _stopAllRumble() {
     this.currentLarge = 0;
     this.currentSmall = 0;
+    this._lastHardwareVibrateTime = 0;
     if (this.rumbleLoopTimer) {
       clearInterval(this.rumbleLoopTimer);
       this.rumbleLoopTimer = null;
@@ -202,6 +186,10 @@ class HapticAudioEngine {
     }
     this._stopAcousticHaptics();
     this._stopVisualHaptics();
+  }
+
+  stopAllRumble() {
+    this._stopAllRumble();
   }
 
   _triggerIOSTapticSwitch() {
@@ -226,25 +214,25 @@ class HapticAudioEngine {
         this.hapticGain.gain.setValueAtTime(0.0001, now);
         this.hapticGain.connect(this.ctx.destination);
 
-        // Sub-bass 50Hz sine wave (Large heavy motor chassis kinetic resonance)
+        // Sub-bass 48Hz sine wave (Smartphone chassis mechanical resonance)
         this.oscLarge = this.ctx.createOscillator();
         this.oscLarge.type = "sine";
-        this.oscLarge.frequency.setValueAtTime(50, now);
+        this.oscLarge.frequency.setValueAtTime(48, now);
         this.oscLarge.connect(this.hapticGain);
         this.oscLarge.start();
 
-        // 115Hz triangle harmonic (Small light motor buzz)
+        // 96Hz harmonic (Direct physical acoustic kick through speaker body)
         this.oscSmall = this.ctx.createOscillator();
         this.oscSmall.type = "triangle";
-        this.oscSmall.frequency.setValueAtTime(115, now);
+        this.oscSmall.frequency.setValueAtTime(96, now);
         this.oscSmall.connect(this.hapticGain);
         this.oscSmall.start();
       }
 
       const normL = large / 255.0;
       const normS = small / 255.0;
-      // Target gain: tactile chassis resonance through smartphone speaker body
-      const targetGain = Math.min(0.85, (normL * 0.55) + (normS * 0.35));
+      // Proportional acoustic haptic resonance (accurate to motor intensity)
+      const targetGain = Math.min(0.75, Math.max(0.001, (normL * 0.45) + (normS * 0.30)));
       this.hapticGain.gain.cancelScheduledValues(now);
       this.hapticGain.gain.setTargetAtTime(targetGain, now, 0.02);
     } catch (_) {}
@@ -262,7 +250,7 @@ class HapticAudioEngine {
 
   _triggerVisualHaptics(large, small) {
     if (typeof document === "undefined") return;
-    const isRumbling = (large > 15 || small > 15);
+    const isRumbling = (large > 0 || small > 0);
     const frame1 = document.getElementById("gamepad-frame");
     const frame2 = document.getElementById("layout2-frame");
     if (frame1) frame1.classList.toggle("haptic-rumbling", isRumbling);
@@ -430,6 +418,8 @@ class GamepadClient {
     this.security = new SecurityEngine();
     this.ws = null;
     this.connected = false;
+    this.authenticated = false;
+    this._reconnectTimer = null;
     this.playerSlot = 1;
     this.isRotated = false;
     this.seq = 0;
@@ -623,7 +613,10 @@ class GamepadClient {
 
     // Splash Screen Tap Handler (Guaranteed Responsive across Mobile & Desktop)
     if (this.dom.splashScreen) {
+      let splashHandled = false;
       const handleSplash = (e) => {
+        if (splashHandled) return;
+        splashHandled = true;
         if (e) {
           try {
             e.preventDefault();
@@ -976,9 +969,7 @@ class GamepadClient {
     this.playerSlot = (this.playerSlot % 4) + 1;
     localStorage.setItem("controller_preferred_slot", this.playerSlot.toString());
     this.haptics.triggerClick("heavy");
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.close();
-    }
+    this.connect();
   }
 
   toggleGyro() {
@@ -1127,8 +1118,18 @@ class GamepadClient {
   }
 
   connect() {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
     if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onerror = null;
+      this.ws.onclose = null;
       try { this.ws.close(); } catch (_) {}
+      this.ws = null;
     }
 
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -1138,7 +1139,8 @@ class GamepadClient {
     this.ws.binaryType = "arraybuffer";
 
     this.ws.onopen = () => {
-      this.connected = true;
+      this.connected = false;
+      this.authenticated = false;
     };
 
     this.ws.onmessage = async (evt) => {
@@ -1153,11 +1155,12 @@ class GamepadClient {
         if (!msg) return;
 
         if (msg.type === "AUTH_CHALLENGE") {
-          const prefSlot = 1;
+          const prefSlot = this.playerSlot || 1;
           const authResponse = this.security.solveChallenge(msg.nonce, msg.timestamp, this.clientId, prefSlot);
           this.ws.send(JSON.stringify(authResponse));
         } else if (msg.type === "AUTH_SUCCESS") {
           this.connected = true;
+          this.authenticated = true;
           this.playerSlot = msg.player_slot;
           this._updatePingDisplay(1);
           this.sendInputNow(true);
@@ -1175,14 +1178,27 @@ class GamepadClient {
 
     this.ws.onclose = () => {
       this.connected = false;
+      this.authenticated = false;
+      this.haptics.stopAllRumble();
       this._updatePingDisplay(null);
-      setTimeout(() => this.connect(), 1500);
+      if (!this._reconnectTimer) {
+        this._reconnectTimer = setTimeout(() => {
+          this._reconnectTimer = null;
+          this.connect();
+        }, 1500);
+      }
+    };
+
+    this.ws.onerror = () => {
+      this.connected = false;
+      this.authenticated = false;
+      this.haptics.stopAllRumble();
     };
   }
 
   sendInputNow(isCritical = false) {
     if (this.isCustomizingLayout1) return;
-    if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.authenticated || !this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
     const now = performance.now();
     this._lastSendTime = now;
@@ -1275,7 +1291,7 @@ class GamepadClient {
     // Streams uninterrupted controller frames whether neutral or active, exactly like a real physical controller!
     if (this._transmitTimer) clearInterval(this._transmitTimer);
     this._transmitTimer = setInterval(() => {
-      if (this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
         const now = performance.now();
         // Minimum 3.0ms spacing between packets to avoid duplicate flooding on top of pointer events
         if (now - this._lastSendTime >= 3.0) {
@@ -1289,11 +1305,14 @@ class GamepadClient {
 
       // Prioritize active touch inputs every display frame
       if (
-        this.leftStickActive ||
-        this.rightStickActive ||
-        this.throttle > 0 ||
-        this.brake > 0 ||
-        this.gyroEnabled
+        this.authenticated &&
+        this.connected && (
+          this.leftStickActive ||
+          this.rightStickActive ||
+          this.throttle > 0 ||
+          this.brake > 0 ||
+          this.gyroEnabled
+        )
       ) {
         if (now - this._lastSendTime >= 2.0) {
           this.sendInputNow(false);
@@ -1302,7 +1321,7 @@ class GamepadClient {
 
       if (now - lastPing >= 1000) {
         lastPing = now;
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: "PING", ts: now }));
         }
       }
@@ -1318,7 +1337,7 @@ class GamepadClient {
     }
     if (!this.dom.pingText) return;
 
-    if (rtt === null || !this.connected) {
+    if (rtt === null || !this.connected || !this.authenticated) {
       this.dom.pingText.textContent = "-- ms";
     } else {
       this.dom.pingText.textContent = `${rtt} ms`;
@@ -1874,7 +1893,7 @@ class GamepadClient {
       if (this.dom.rightStickPuck) this.dom.rightStickPuck.style.transform = "translate(0px, 0px)";
 
       // Send neutral frame to game server
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
         const neutralPacket = {
           type: "INPUT",
           seq: ++this.seq,

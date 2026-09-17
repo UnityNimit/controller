@@ -120,12 +120,13 @@ class AnomalyFirewall:
         """
         now = time.perf_counter()
 
-        # 1. Sequence Number Validation (detects replay / out-of-order injection)
+        # 1. Sequence Number Validation (detects replay / out-of-order injection with uint16 wrap-around handling)
         if client_id in self.last_seq_num:
-            expected_seq = self.last_seq_num[client_id] + 1
-            if seq <= self.last_seq_num[client_id]:
+            last = self.last_seq_num[client_id]
+            diff = (seq - last) & 0xFFFF
+            if diff == 0 or diff >= 32768:
                 self._record_anomaly(client_id)
-                return False, f"SEQUENCE_REGRESSION: Received seq {seq}, expected > {self.last_seq_num[client_id]}"
+                return False, f"SEQUENCE_REGRESSION: Received seq {seq}, expected forward from {last}"
 
         # Neutral / zero-reset packets always bypass timing guards for player safety
         if not is_neutral:

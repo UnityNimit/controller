@@ -110,3 +110,25 @@ def test_anomaly_firewall_high_frequency_throughput():
         assert err is None
 
 
+def test_anomaly_firewall_uint16_sequence_rollover():
+    firewall = AnomalyFirewall(max_rate_hz=1000.0, min_inter_arrival_sec=0.0001)
+    client_id = "rollover_player"
+
+    # Packet near uint16 boundary
+    ok1, _ = firewall.inspect_packet(client_id, seq=65535, client_time=time.time())
+    assert ok1 is True
+
+    # Packet rolled over to 0 (valid forward progression after 65535)
+    time.sleep(0.0005)
+    ok2, err2 = firewall.inspect_packet(client_id, seq=0, client_time=time.time())
+    assert ok2 is True
+    assert err2 is None
+
+    # Next packet
+    time.sleep(0.0005)
+    ok3, err3 = firewall.inspect_packet(client_id, seq=1, client_time=time.time())
+    assert ok3 is True
+    assert err3 is None
+
+
+

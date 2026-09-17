@@ -142,7 +142,7 @@ class TelemetryBridge:
         self.max_rtt_ms: float = 0.0
         self.effective_hz: float = 0.0
 
-    def pulse_test(self, slot_index: int) -> None:
+    def pulse_test(self, slot_index: int, duration_sec: float = 1.5) -> None:
         """Triggers a momentary button pulse and test rumble on slot_index to wake up testers and vibrate phone."""
         if self.pulse_test_callback is not None:
             try:
@@ -152,7 +152,7 @@ class TelemetryBridge:
 
         if self.trigger_test_rumble_callback is not None:
             try:
-                self.trigger_test_rumble_callback(slot_index, 255, 255, 0.4)
+                self.trigger_test_rumble_callback(slot_index, 255, 255, duration_sec)
             except Exception as e:
                 logging.getLogger("Controller.Bridge").debug(f"Test rumble error: {e}")
 

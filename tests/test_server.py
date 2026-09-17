@@ -3,6 +3,7 @@ Integration tests for Gateway HTTP serving and WebSocket protocol handling
 """
 
 import asyncio
+import time
 import hmac
 import hashlib
 import json
@@ -424,18 +425,24 @@ def test_gateway_rumble_websocket_delivery():
                 auth = json.loads(auth_raw)
                 assert auth["type"] == "AUTH_SUCCESS"
 
+                async def recv_rumble():
+                    for _ in range(10):
+                        raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                        m = json.loads(raw)
+                        if m.get("type") == "RUMBLE":
+                            return m
+                    raise TimeoutError("No RUMBLE packet received")
+
                 # 2. Trigger direct rumble on slot 0
                 server._on_rumble_event(0, 200, 150)
-                msg_raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                msg = json.loads(msg_raw)
+                msg = await recv_rumble()
                 assert msg["type"] == "RUMBLE"
                 assert msg["large"] == 200
                 assert msg["small"] == 150
 
                 # 3. Fallback routing: event on slot 1 with only 1 client connected
                 server._on_rumble_event(1, 120, 80)
-                msg2_raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                msg2 = json.loads(msg2_raw)
+                msg2 = await recv_rumble()
                 assert msg2["type"] == "RUMBLE"
                 assert msg2["large"] == 120
                 assert msg2["small"] == 80
@@ -485,3 +492,137 @@ def test_terminal_mode_and_command_handling():
             await server.stop()
 
     asyncio.run(_term_test())
+
+
+def test_early_binary_frame_during_handshake_resilience():
+    """Verify that early binary micro-packets sent before handshake completes do not crash the server with UTF-8 decode error."""
+    async def _resilience_test():
+        test_port = 8121
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+        await server.start()
+
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+            async with websockets.connect(url) as ws:
+                # 1. Expect AUTH_CHALLENGE
+                challenge_raw = await ws.recv()
+                challenge = json.loads(challenge_raw)
+                assert challenge["type"] == "AUTH_CHALLENGE"
+                nonce = challenge["nonce"]
+                ts = challenge["timestamp"]
+
+                # 2. Simulate client prematurely blasting binary packets before auth
+                # Starting with 0x43, 0x02, and non-UTF8 byte 0x97 (exactly like reported error)
+                bad_binary = bytearray(24)
+                bad_binary[0] = 0x43
+                bad_binary[1] = 0x02
+                bad_binary[2] = 0x97
+                bad_binary[3] = 0x00
+                await ws.send(bytes(bad_binary))
+
+                # Also send non-auth JSON frame
+                await ws.send(json.dumps({"type": "PING", "ts": 12345}))
+
+                # 3. Now send valid AUTH_RESPONSE
+                payload = f"{nonce}:{ts}".encode("utf-8")
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, payload, hashlib.sha256).hexdigest()
+                await ws.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "resilience_test_client",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig
+                }))
+
+                # 4. Expect AUTH_SUCCESS without server crashing
+                auth_raw = await ws.recv()
+                auth = json.loads(auth_raw)
+                assert auth["type"] == "AUTH_SUCCESS"
+                assert auth["client_id"] == "resilience_test_client"
+        finally:
+            await server.stop()
+
+    asyncio.run(_resilience_test())
+
+
+def test_reconnect_superseded_socket_does_not_release_slot():
+    """Verify that when a client reconnects, closing the older superseded socket does not release the client's slot."""
+    async def _reconnect_test():
+        test_port = 8122
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+        await server.start()
+
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+            client_id = "persistent_reconnect_client"
+
+            # Helper for challenge-response auth
+            async def _auth(ws):
+                ch_raw = await ws.recv()
+                ch = json.loads(ch_raw)
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                payload = f"{nonce}:{ts}".encode("utf-8")
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, payload, hashlib.sha256).hexdigest()
+                await ws.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": client_id,
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig
+                }))
+                suc_raw = await ws.recv()
+                return json.loads(suc_raw)
+
+            # Socket 1 connects and authenticates
+            ws1 = await websockets.connect(url)
+            suc1 = await _auth(ws1)
+            assert suc1["type"] == "AUTH_SUCCESS"
+            assert server.input_manager.get_slot(client_id) == 0
+
+            # Socket 2 connects before socket 1 closes (common during fast reconnect / Wi-Fi blips)
+            ws2 = await websockets.connect(url)
+            suc2 = await _auth(ws2)
+            assert suc2["type"] == "AUTH_SUCCESS"
+            assert server.input_manager.get_slot(client_id) == 0
+
+            # Now socket 1 closes
+            await ws1.close()
+            await asyncio.sleep(0.05)
+
+            # Client MUST still own Slot 0 through ws2!
+            assert server.input_manager.get_slot(client_id) == 0
+
+            # ws2 sends input successfully
+            await ws2.send(json.dumps({
+                "type": "INPUT",
+                "seq": 1,
+                "ts": time.time(),
+                "stick_x": 15000,
+                "stick_y": 0,
+                "throttle": 1.0,
+                "brake": 0.0,
+                "buttons": {}
+            }))
+            await asyncio.sleep(0.05)
+
+            # Virtual gamepad should have received stick_x=15000
+            ctrl = server.input_manager.controllers[0]
+            assert ctrl.steering == 15000
+
+            await ws2.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(_reconnect_test())
+
+
