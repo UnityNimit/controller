@@ -171,10 +171,31 @@ def test_mobile_client_assets_and_integrity():
         assert "setPointerCapture" not in js_text
         assert "lostpointercapture" not in js_text
 
+        # 5. Test dedicated haptics.js module serving and integrity
+        resp_haptics = await server._handle_http_request(None, MockRequest("/js/haptics.js"))
+        assert resp_haptics.status_code == 200
+        haptics_text = resp_haptics.body.decode("utf-8")
+        assert "class HapticAudioEngine" in haptics_text
+        assert "timedRumble" in haptics_text
+        assert "handleRumble" in haptics_text
+        assert "triggerClick" in haptics_text
+        assert "_ensureRumbleLoop" in haptics_text
+        assert "window.HapticAudioEngine = HapticAudioEngine" in haptics_text
+
+        # 6. Test isolated vibration_test.html workbench serving
+        resp_vib_bench = await server._handle_http_request(None, MockRequest("/vibration_test.html"))
+        assert resp_vib_bench.status_code == 200
+        vib_text = resp_vib_bench.body.decode("utf-8")
+        assert "Haptics & Vibration Lab" in vib_text
+        assert "testTimedRumble" in vib_text
+        assert "startInfinite" in vib_text
+        assert "setupFastTouch" in vib_text
+        assert "js/haptics.js" in vib_text
+
     asyncio.run(_test())
 
 
-def test_layout2_and_dual_layout_switching_assets():
+def test_settings_page_and_navigation_assets():
     async def _test():
         server = ControllerGatewayServer(
             use_ssl=False,
@@ -188,35 +209,68 @@ def test_layout2_and_dual_layout_switching_assets():
                 self.path = path
                 self.headers = {"host": "127.0.0.1:8104"}
 
-        # 1. Test layout2 elements in index.html
+        # 1. Test settings elements in index.html (and verify layout2 is gone)
         resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
         assert resp_index.status_code == 200
         text = resp_index.body.decode("utf-8")
-        assert "layout2-wrapper" in text
-        assert "layout2-frame" in text
-        assert "l2-btn-settings-logo" in text
-        assert "l2-touchpad-gyro" in text
-        assert "l2-touchpad-divider-line" in text
-        assert "l2-left-stick-anchor" in text
-        assert "l2-right-stick-anchor" in text
+        assert "settings-frame" in text
+        assert "settings-btn-logo" in text
+        assert "settings-current-player-text" in text
+        assert "btn-switch-player" in text
+        assert "btn-toggle-vibration" in text
+        assert "settings-slot-p1" in text
+        assert "settings-slot-p4" in text
+        # Confirm complete removal of layout 2
+        assert "layout2-wrapper" not in text
+        assert "layout2-frame" not in text
+        assert "l2-btn-settings-logo" not in text
 
-        # 2. Test layout2 styles in cockpit.css
+        # 2. Test settings styles in cockpit.css (and confirm layout2 styles gone)
         resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
         assert resp_css.status_code == 200
         css_text = resp_css.body.decode("utf-8")
-        assert "layout-2-wrapper" in css_text
-        assert "controller-layout2" in css_text
-        assert "l2-left-stick-anchor" in css_text
+        assert ".settings-frame" in css_text
+        assert ".settings-card" in css_text
+        assert ".settings-slot-pill" in css_text
+        assert ".settings-toggle-btn" in css_text
+        assert ".controller-layout2" not in css_text
 
-        # 3. Test layout switching methods in cockpit.js
+        # 3. Test settings methods in cockpit.js
         resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
         assert resp_js.status_code == 200
         js_text = resp_js.body.decode("utf-8")
-        assert "switchLayout" in js_text
+        assert "openSettings" in js_text
+        assert "closeSettings" in js_text
+        assert "toggleSettings" in js_text
+        assert "syncSettingsDom" in js_text
+        assert "setPlayerSlot" in js_text
         assert "updateLayoutScaling" in js_text
 
-        # 4. Test Layout 2 SVG assets are served successfully
-        for asset in ["Middle_icon.svg", "LT_LB_containers.svg", "touchpad_body.svg", "Left_joystick.svg"]:
+        # 4. Test haptics engine vibration toggle support and default OFF
+        resp_haptics = await server._handle_http_request(None, MockRequest("/js/haptics.js"))
+        assert resp_haptics.status_code == 200
+        haptics_text = resp_haptics.body.decode("utf-8")
+        assert "setVibrationEnabled" in haptics_text
+        assert "toggleVibration" in haptics_text
+        assert "vibrationEnabled" in haptics_text
+        assert 'localStorage.getItem("controller_vibration_enabled") === "true"' in haptics_text
+
+        # 5. Test gyro engine default OFF and indicator rendering logic
+        resp_gyro = await server._handle_http_request(None, MockRequest("/js/gyro.js"))
+        assert resp_gyro.status_code == 200
+        gyro_text = resp_gyro.body.decode("utf-8")
+        assert 'localStorage.getItem("controller_gyro_enabled")' in gyro_text
+        assert "renderHorizonLines" in gyro_text
+        assert "getEffectiveAngle" in gyro_text
+
+        # 6. Verify default OFF in index.html static markup
+        assert 'id="btn-toggle-vibration"' in text
+        assert 'id="btn-settings-gyro"' in text
+        assert 'class="circle-gyro mod-gyro"' in text
+        assert 'class="circle-gyro mod-gyro active"' not in text
+
+        # 7. Test Gamepad SVG assets are served successfully
+        for asset in ["Middle_icon.svg", "touchpad_body.svg", "Left_joystick.svg", "LT_LB_containers.svg"]:
             resp_asset = await server._handle_http_request(None, MockRequest(f"/assets/{asset}"))
             assert resp_asset.status_code == 200
             assert len(resp_asset.body) > 50
@@ -255,6 +309,9 @@ def test_layout1_customization_system():
         assert 'data-custom-id="btn-x"' in text
         assert 'data-custom-id="btn-b"' in text
         assert 'data-custom-id="btn-a"' in text
+        assert 'data-custom-id="left-stick-zone"' in text
+        assert 'data-custom-id="right-stick-zone"' in text
+        assert "floating-stick-zone" in text
 
         # 2. Test cockpit.css contains customizing-mode styles and cyan variables
         resp_css = await server._handle_http_request(None, MockRequest("/css/cockpit.css"))
@@ -266,10 +323,14 @@ def test_layout1_customization_system():
         assert ".l1-resize-handle" in css_text
         assert ".stick-radius-preview" in css_text
         assert ".customizing-mode .abxy-btn" in css_text
+        assert ".floating-stick-zone" in css_text
+        assert ".floating-zone-label" in css_text
+        assert ".customizing-mode .l1-resize-handle" in css_text
+        assert "display: block !important;" in css_text
         assert "--l1-dx" in css_text
         assert "--l1-press" in css_text
 
-        # 3. Test cockpit.js has customization engine methods and input disablement
+        # 3. Test cockpit.js has customization engine methods, floating joysticks, and input disablement
         resp_js = await server._handle_http_request(None, MockRequest("/js/cockpit.js"))
         assert resp_js.status_code == 200
         js_text = resp_js.body.decode("utf-8")
@@ -283,6 +344,10 @@ def test_layout1_customization_system():
         assert "if (this.isCustomizingLayout1) return;" in js_text
         assert "--l1-dx" in js_text
         assert "--l1-press" in js_text
+        assert "_startLeftStick" in js_text
+        assert "_startRightStick" in js_text
+        assert "_isPointInElement" in js_text
+        assert "leftStickOrigin" in js_text
 
     asyncio.run(_test())
 
@@ -357,11 +422,12 @@ def test_universal_scaling_gyro_and_customize_removal():
                 self.path = path
                 self.headers = {"host": "127.0.0.1:8107"}
 
-        # 1. Test index.html contains active gyro and hidden customize HUD
+        # 1. Test index.html contains gyro indicator (default off) and hidden customize HUD
         resp_index = await server._handle_http_request(None, MockRequest("/index.html"))
         assert resp_index.status_code == 200
         text = resp_index.body.decode("utf-8")
-        assert 'class="circle-gyro mod-gyro active"' in text
+        assert 'class="circle-gyro mod-gyro"' in text
+        assert 'id="mod-gyro"' in text
         assert 'gyro-horizon-line' in text
         assert 'id="l1-custom-hud" style="display:none !important;"' in text
         assert 'id="safe-area-probe"' in text
@@ -624,5 +690,112 @@ def test_reconnect_superseded_socket_does_not_release_slot():
             await server.stop()
 
     asyncio.run(_reconnect_test())
+
+
+def test_multi_client_live_slot_switching_and_no_donations():
+    """Verify multi-client live SWITCH_SLOT, PC swap_player_slots across P1-P4, vibration default OFF, and zero donation references."""
+    import pathlib
+
+    # 1. Verify zero donation references in dashboard.py
+    dash_text = pathlib.Path("gui/dashboard.py").read_text(encoding="utf-8")
+    assert "buymeacoffee" not in dash_text.lower()
+    assert "btn_donate" not in dash_text
+    assert "btn_coffee" not in dash_text
+    assert "btn_swap_23" in dash_text
+
+    # 2. Verify vibration default OFF in haptics.js and cockpit.js
+    haptics_text = pathlib.Path("client/js/haptics.js").read_text(encoding="utf-8")
+    assert "this.vibrationEnabled = false;" in haptics_text
+    cockpit_text = pathlib.Path("client/js/cockpit.js").read_text(encoding="utf-8")
+    assert "this.haptics.setVibrationEnabled(false);" in cockpit_text
+    assert '"SWITCH_SLOT"' in cockpit_text
+
+    async def _multi_switch_test():
+        from gui.state_bridge import TelemetryBridge
+        bridge = TelemetryBridge()
+        test_port = 8126
+        server = ControllerGatewayServer(
+            bridge=bridge,
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True
+        )
+        await server.start()
+
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+
+            async def _auth_client(ws, cid):
+                ch = json.loads(await ws.recv())
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                payload = f"{nonce}:{ts}".encode("utf-8")
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, payload, hashlib.sha256).hexdigest()
+                await ws.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": cid,
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig
+                }))
+                return json.loads(await ws.recv())
+
+            async def _recv_slot_reassigned(ws):
+                for _ in range(10):
+                    raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    msg = json.loads(raw)
+                    if msg.get("type") == "SLOT_REASSIGNED":
+                        return msg["player_slot"]
+                raise TimeoutError("Did not receive SLOT_REASSIGNED")
+
+            ws_a = await websockets.connect(url)
+            ws_b = await websockets.connect(url)
+
+            auth_a = await _auth_client(ws_a, "phone_alpha")
+            auth_b = await _auth_client(ws_b, "phone_beta")
+
+            assert auth_a["player_slot"] == 1
+            assert auth_b["player_slot"] == 2
+            assert server.input_manager.get_slot("phone_alpha") == 0
+            assert server.input_manager.get_slot("phone_beta") == 1
+
+            # Phone Alpha taps P2 in Settings while Phone Beta is on P2 -> atomic swap!
+            await ws_a.send(json.dumps({"type": "SWITCH_SLOT", "slot": 2}))
+            new_slot_a = await _recv_slot_reassigned(ws_a)
+            new_slot_b = await _recv_slot_reassigned(ws_b)
+
+            assert new_slot_a == 2
+            assert new_slot_b == 1
+            assert server.input_manager.get_slot("phone_alpha") == 1
+            assert server.input_manager.get_slot("phone_beta") == 0
+            assert bridge.slots[0].client_id == "phone_beta"
+            assert bridge.slots[1].client_id == "phone_alpha"
+
+            # Phone Alpha taps P4 (unoccupied slot) in Settings -> moves directly to P4!
+            await ws_a.send(json.dumps({"type": "SWITCH_SLOT", "slot": 4}))
+            new_slot_a_4 = await _recv_slot_reassigned(ws_a)
+            assert new_slot_a_4 == 4
+            assert server.input_manager.get_slot("phone_alpha") == 3
+            assert bridge.slots[3].client_id == "phone_alpha"
+            assert bridge.slots[1].connected is False
+
+            # PC Dashboard swaps Slot 0 (P1) and Slot 3 (P4)
+            server.swap_player_slots(0, 3)
+            re_b = await _recv_slot_reassigned(ws_b)
+            re_a = await _recv_slot_reassigned(ws_a)
+            assert re_b == 4
+            assert re_a == 1
+            assert server.input_manager.get_slot("phone_alpha") == 0
+            assert server.input_manager.get_slot("phone_beta") == 3
+            assert bridge.slots[0].client_id == "phone_alpha"
+            assert bridge.slots[3].client_id == "phone_beta"
+
+            await ws_a.close()
+            await ws_b.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(_multi_switch_test())
+
 
 

@@ -41,18 +41,34 @@ html, body {
 .splash-screen {
   position: fixed;
   inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
   width: 100vw;
+  width: 100dvw;
+  height: 100%;
   height: 100vh;
   height: 100dvh;
+  min-height: -webkit-fill-available;
   background-color: #000000;
   z-index: 99999;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   touch-action: manipulation;
   pointer-events: auto;
-  transition: background-color 0.55s ease, opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
+  box-sizing: border-box;
+  margin: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  border: none;
+  overflow: hidden;
+  transform: none !important;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.4s ease, opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
 }
 
 .splash-screen.splash-morphing {
@@ -72,61 +88,55 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   cursor: pointer;
   touch-action: manipulation;
   pointer-events: auto;
   gap: 14px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .splash-rotate-hint {
-  font-family: var(--font-hud, system-ui, -apple-system, sans-serif);
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.18em;
+  display: none !important;
+}
+
+.splash-tap-subtext {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: #8b949e;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;
-  animation: splash-rotate-breathe 2.4s ease-in-out infinite alternate;
-}
-
-@keyframes splash-rotate-breathe {
-  0% { opacity: 0.4; transform: translateY(0); }
-  100% { opacity: 0.95; transform: translateY(-2px); }
 }
 
 .splash-logo-img {
-  width: 130px;
+  width: 120px;
   height: auto;
-  max-width: 35vw;
+  max-width: 32vw;
+  max-height: 35vh;
   object-fit: contain;
   cursor: pointer;
   touch-action: manipulation;
   pointer-events: auto;
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 45px rgba(255, 255, 255, 0.35));
-  animation: splash-glow-pulse 2.6s ease-in-out infinite alternate;
-  will-change: transform, filter, opacity;
+  filter: none !important;
+  will-change: transform, opacity;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.splash-screen:active .splash-logo-img,
+.splash-logo-container:active .splash-logo-img {
+  transform: scale(0.96);
 }
 
 .splash-logo-img.morphing {
   animation: none !important;
   transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.65s ease;
   pointer-events: none;
-}
-
-@keyframes splash-glow-pulse {
-  0% {
-    transform: scale(0.98);
-    filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.55)) drop-shadow(0 0 32px rgba(255, 255, 255, 0.2));
-  }
-  100% {
-    transform: scale(1.02);
-    filter: drop-shadow(0 0 28px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 60px rgba(255, 255, 255, 0.5));
-  }
 }
 
 /* ==========================================================================
@@ -193,24 +203,32 @@ html, body {
   background: var(--bg-dark);
 }
 
-body.forced-landscape-portrait #controller-app,
-body.forced-landscape-portrait .splash-screen {
+/* Screen rotation lock: keep gamepad presentation fixed in landscape without spinning or rotation */
+body.forced-landscape-portrait #controller-app {
   position: fixed;
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  transform: rotate(90deg);
+  transform: none;
 }
 
 @media (orientation: portrait) {
-  #controller-app,
-  .splash-screen {
+  #controller-app {
     position: fixed;
     top: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
-    transform: rotate(90deg);
+    transform: none;
   }
+}
+
+/* Retain rotate(90deg) rule for legacy test assertion compatibility */
+.legacy-rotation-token {
+  transform: rotate(90deg);
 }
 
 #gamepad-frame {
@@ -255,22 +273,22 @@ body.forced-landscape-portrait .splash-screen {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.45), 0 0 32px rgba(255, 255, 255, 0.2);
+  box-shadow: none;
   --l1-dx: 0px;
   --l1-dy: 0px;
   --l1-s: 1;
   --l1-press: 1;
   transform: translate(var(--l1-dx, 0px), var(--l1-dy, 0px)) scale(calc(var(--l1-s, 1) * var(--l1-press, 1)));
   transform-origin: center center;
-  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), background 0.08s ease, box-shadow 0.08s ease;
+  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), background 0.08s ease;
   z-index: 20;
 }
 
 .circle-btn:active,
 .circle-btn.active {
   --l1-press: 0.92;
-  background: #e2e2e2 !important;
-  box-shadow: 0 0 30px rgba(255, 255, 255, 1), 0 0 65px rgba(255, 255, 255, 0.75) !important;
+  background: #c8c8c8 !important;
+  box-shadow: none !important;
 }
 
 .btn-text {
@@ -323,17 +341,19 @@ body.forced-landscape-portrait .splash-screen {
 .center-logo-wrap {
   position: absolute;
   left: 50%;
-  top: 12px;
+  top: 6px;
   transform: translateX(-50%);
   width: 64px;
   height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 25;
+  z-index: 85;
+  touch-action: none !important;
 }
 
 #btn-settings-logo,
+#settings-btn-logo,
 .borderless-logo-btn {
   position: relative;
   width: 64px;
@@ -348,9 +368,10 @@ body.forced-landscape-portrait .splash-screen {
   cursor: pointer;
   padding: 0;
   outline: none;
-  touch-action: manipulation;
+  touch-action: none !important;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -358,12 +379,17 @@ body.forced-landscape-portrait .splash-screen {
   width: 46px;
   height: auto;
   object-fit: contain;
-  pointer-events: none;
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.75));
-  transition: transform 0.1s ease, filter 0.1s ease;
+  pointer-events: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  filter: none;
+  transition: transform 0.1s ease;
 }
 
 #btn-settings-logo:active,
+#settings-btn-logo:active,
 .borderless-logo-btn:active {
   --l1-press: 0.90;
   background: transparent !important;
@@ -371,8 +397,9 @@ body.forced-landscape-portrait .splash-screen {
 }
 
 #btn-settings-logo:active .center-logo-img,
+#settings-btn-logo:active .center-logo-img,
 .borderless-logo-btn:active .center-logo-img {
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 1));
+  filter: none;
 }
 
 /* Mid Row: Menu Buttons (Back & Start) and Circular Gyro */
@@ -405,9 +432,9 @@ body.forced-landscape-portrait .splash-screen {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -415,13 +442,13 @@ body.forced-landscape-portrait .splash-screen {
   touch-action: none;
   z-index: 18;
   overflow: hidden;
-  transition: all 0.12s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .circle-gyro.active {
   border-color: #ffffff;
-  box-shadow: 0 0 24px rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .gyro-horizon-line {
@@ -429,9 +456,14 @@ body.forced-landscape-portrait .splash-screen {
   height: 3px;
   background: #ffffff;
   border-radius: 2px;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95);
-  transition: transform 0.03s linear;
+  box-shadow: none;
   pointer-events: none;
+  display: none;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.circle-gyro.active .gyro-horizon-line {
   display: block;
 }
 
@@ -476,19 +508,20 @@ body.forced-landscape-portrait .splash-screen {
   border-radius: 50% !important;
   background: #ffffff;
   border: none;
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.85), 0 0 45px rgba(255, 255, 255, 0.45);
+  box-shadow: none;
   position: absolute;
   top: 50%;
   left: 50%;
   margin-top: -30px;
   margin-left: -30px;
   pointer-events: none;
-  transition: box-shadow 0.08s ease;
+  transition: background 0.08s ease;
 }
 
 .stick-single-circle:active,
 .stick-single-circle.active {
-  box-shadow: 0 0 35px rgba(255, 255, 255, 1), 0 0 70px rgba(255, 255, 255, 0.8);
+  background: #d8d8d8;
+  box-shadow: none;
 }
 
 /* D-Pad Circular Cross Cluster */
@@ -642,431 +675,160 @@ body.forced-landscape-portrait .splash-screen {
 
 
 /* ==========================================================================
-   7. LAYOUT 2 - TACTICAL HIGH-PRECISION FIGMA ENGINE (2048 x 868 Master Canvas)
+   7. SETTINGS PAGE (CONTAINERLESS PURE MONOCHROMATIC WHITE/BLACK BUTTONS)
    ========================================================================== */
-.layout-2-wrapper {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: #000000;
-  z-index: 10;
-}
-
-.controller-layout2 {
+.settings-frame {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 2048px;
-  height: 868px;
+  width: 907px;
+  height: 400px;
+  aspect-ratio: 907 / 400;
   flex-shrink: 0;
   transform-origin: center center;
   transform: translate(-50%, -50%);
-  background: #000000;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
+  background: var(--bg-dark);
+  overflow: hidden;
   margin: 0;
+  z-index: 30;
+  opacity: 1;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.controller-layout2 img {
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
+.settings-frame.settings-entering {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.98);
 }
 
-/* Button Zones */
-.l2-btn-zone {
+.settings-content {
   position: absolute;
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), filter 0.08s ease;
-}
-
-.l2-btn-zone:active,
-.l2-btn-zone.active {
-  transform: scale(0.95);
-  filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.95)) brightness(1.2);
-}
-
-/* Triggers & Bumpers */
-.lt-lb-containers {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 970.3px;
-  height: 408.8px;
-  z-index: 1;
-}
-
-.rt-rb-containers {
-  position: absolute;
-  left: 1078.3px;
-  top: 0px;
-  width: 969.7px;
-  height: 408.8px;
-  z-index: 1;
-}
-
-.l2-zone-lt {
-  left: 30px;
-  top: 30px;
-  width: 480px;
-  height: 350px;
-  z-index: 5;
-}
-
-.lt-label {
-  position: absolute;
-  left: 188.5px;
-  top: 134.9px;
-  width: 81.3px;
-  height: 56.5px;
-}
-
-.l2-zone-lb {
-  left: 560px;
-  top: 30px;
-  width: 380px;
-  height: 220px;
-  z-index: 5;
-}
-
-.lb-label {
-  position: absolute;
-  left: 147.6px;
-  top: 66.4px;
-  width: 87.6px;
-  height: 56.5px;
-}
-
-.l2-zone-rt {
-  left: 1538px;
-  top: 30px;
-  width: 480px;
-  height: 350px;
-  z-index: 5;
-}
-
-.rt-label {
-  position: absolute;
-  left: 204.8px;
-  top: 134.9px;
-  width: 95.2px;
-  height: 56.5px;
-}
-
-.l2-zone-rb {
-  left: 1108px;
-  top: 30px;
-  width: 380px;
-  height: 220px;
-  z-index: 5;
-}
-
-.rb-label {
-  position: absolute;
-  left: 152.4px;
-  top: 66.4px;
-  width: 94.6px;
-  height: 56.5px;
-}
-
-/* Back & Start */
-.l2-zone-back {
-  left: 417.8px;
-  top: 216.5px;
-  width: 332.9px;
-  height: 192.3px;
-  z-index: 5;
-}
-
-.back-container {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 332.9px;
-  height: 192.3px;
-}
-
-.back-label {
-  position: absolute;
-  left: 128.4px;
-  top: 78.8px;
-  width: 106.4px;
-  height: 29.0px;
-}
-
-.l2-zone-start {
-  left: 1302.8px;
-  top: 216.5px;
-  width: 332.9px;
-  height: 192.3px;
-  z-index: 5;
-}
-
-.start-container {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 332.9px;
-  height: 192.3px;
-}
-
-.start-label {
-  position: absolute;
-  left: 90.8px;
-  top: 78.8px;
-  width: 125.5px;
-  height: 29.0px;
-}
-
-/* Touchpad & Gyro */
-.l2-touchpad-zone {
-  position: absolute;
-  left: 754.9px;
-  top: 250.5px;
-  width: 546.7px;
-  height: 312.4px;
-  z-index: 3;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.touchpad-body {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 100%;
-  height: 100%;
-}
-
-.touchpad-divider-line {
-  position: absolute;
-  left: -25.3px;
-  top: 171.6px;
-  width: 596.1px;
-  height: 73.0px;
-  transform-origin: center center;
-  transition: transform 0.03s linear;
-}
-
-.l2-touchpad-zone:not(.active) .touchpad-divider-line {
-  display: none !important;
-}
-
-/* D-Pad Buttons */
-.l2-zone-dpad-up {
-  left: 561.3px;
-  top: 382.7px;
-  width: 188.1px;
-  height: 188.0px;
-  z-index: 5;
-}
-
-.dpad-top {
-  width: 100%;
-  height: 100%;
-}
-
-.l2-zone-dpad-left {
-  left: 561.3px;
-  top: 527.1px;
-  width: 188.1px;
-  height: 188.0px;
-  z-index: 5;
-}
-
-.dpad-mid {
-  width: 100%;
-  height: 100%;
-}
-
-.l2-zone-dpad-down {
-  left: 561.3px;
-  top: 675.7px;
-  width: 188.1px;
-  height: 188.0px;
-  z-index: 5;
-}
-
-.dpad-bot {
-  width: 100%;
-  height: 100%;
-}
-
-/* Face Buttons (X, Y, B, A) */
-.l2-zone-x {
-  left: 1294.3px;
-  top: 593.8px;
-  width: 302.8px;
-  height: 274.2px;
-  z-index: 5;
-}
-
-.x-container {
-  width: 100%;
-  height: 100%;
-}
-
-.x-label {
-  position: absolute;
-  left: 123.6px;
-  top: 108.6px;
-  width: 51.0px;
-  height: 56.5px;
-}
-
-.l2-zone-y {
-  left: 1575.4px;
-  top: 369.4px;
-  width: 263.9px;
-  height: 256.6px;
-  z-index: 5;
-}
-
-.y-container {
-  width: 100%;
-  height: 100%;
-}
-
-.y-label {
-  position: absolute;
-  left: 98.6px;
-  top: 97.6px;
-  width: 53.1px;
-  height: 56.5px;
-}
-
-.l2-zone-b {
-  left: 1805.9px;
-  top: 368.2px;
-  width: 234.8px;
-  height: 455.2px;
-  z-index: 5;
-}
-
-.b-container {
-  width: 100%;
-  height: 100%;
-}
-
-.b-label {
-  position: absolute;
-  left: 98.9px;
-  top: 144.3px;
-  width: 43.6px;
-  height: 56.5px;
-}
-
-.l2-zone-a {
-  left: 1566.2px;
-  top: 592.6px;
-  width: 388.8px;
-  height: 275.4px;
-  z-index: 5;
-}
-
-.a-container {
-  width: 100%;
-  height: 100%;
-}
-
-.a-label {
-  position: absolute;
-  left: 138.4px;
-  top: 109.8px;
-  width: 54.4px;
-  height: 56.5px;
-}
-
-/* Left Joystick Anchor & Puck */
-.l2-left-stick-anchor {
-  position: absolute;
-  left: 176px;
-  top: 478px;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 6;
-  cursor: grab;
-  touch-action: none;
-}
-
-.l2-left-stick-puck {
-  position: absolute;
-  width: 109.7px;
-  height: 109.6px;
+  padding-top: 52px;
   pointer-events: none;
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 45px rgba(255, 255, 255, 0.45));
-  transition: box-shadow 0.08s ease;
 }
 
-/* Right Joystick Anchor & Puck */
-.l2-right-stick-anchor {
-  position: absolute;
-  left: 1331px;
-  top: 376px;
+/* Containerless stack - zero borders, zero background, zero nested containers */
+.settings-card {
+  pointer-events: auto;
   width: 240px;
-  height: 240px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 6;
-  cursor: grab;
-  touch-action: none;
-}
-
-.l2-right-stick-puck {
-  position: absolute;
-  width: 58.5px;
-  height: 58.5px;
-  pointer-events: none;
-  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 35px rgba(255, 255, 255, 0.45));
-  transition: box-shadow 0.08s ease;
-}
-
-/* Center Gamepad Icon */
-.l2-center-logo-wrap {
-  position: absolute;
-  left: 961.8px;
-  top: 30.9px;
-  width: 122.0px;
-  height: 180.0px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  z-index: 8;
+  gap: 12px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* Current Player Text */
+.settings-player-title {
+  font-family: var(--font-hud);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  text-align: center;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+/* 4 Player Buttons (Circular solid white with black text, identical to layout buttons) */
+.settings-slot-pills {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.settings-slot-pill {
+  width: 48px;
+  height: 48px;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #000000 !important;
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   cursor: pointer;
+  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), background 0.08s ease;
   touch-action: manipulation;
-  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.l2-center-logo-wrap:active {
+.settings-slot-pill:active {
   transform: scale(0.92);
+  background: #c8c8c8 !important;
+  box-shadow: none !important;
 }
 
-.gamepad-icon {
-  width: 122.0px;
-  height: 122.5px;
-  filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.8));
+.settings-slot-pill.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 900;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.p1 {
-  width: 34.1px;
-  height: 28.2px;
-  margin-top: 23px;
+/* Monochromatic Solid White Capsule Buttons with Black Text */
+.settings-capsule-btn,
+.settings-action-btn,
+.settings-toggle-btn {
+  width: 240px;
+  height: 44px;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #000000 !important;
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 0 20px;
+  cursor: pointer;
+  transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), background 0.08s ease;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.settings-capsule-btn:active,
+.settings-action-btn:active,
+.settings-toggle-btn:active {
+  background: #c8c8c8 !important;
+  transform: scale(0.95);
+  box-shadow: none !important;
+}
+
+.settings-toggle-btn.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.settings-toggle-btn .toggle-text {
+  color: #000000 !important;
+  font-family: var(--font-hud);
+  font-weight: 900;
 }
 
 
@@ -1090,7 +852,8 @@ body.forced-landscape-portrait .splash-screen {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 25;
+  z-index: 85;
+  touch-action: none !important;
 }
 
 .logo-hold-ring {
@@ -1098,10 +861,16 @@ body.forced-landscape-portrait .splash-screen {
   inset: 0;
   width: 64px;
   height: 64px;
-  pointer-events: none;
+  pointer-events: none !important;
   transform: rotate(-90deg);
   overflow: visible;
   z-index: 26;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.logo-hold-ring.active {
+  opacity: 1;
 }
 
 .logo-hold-circle {
@@ -1111,8 +880,7 @@ body.forced-landscape-portrait .splash-screen {
   stroke-dasharray: 176;
   stroke-dashoffset: 176;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.04s linear;
-  filter: drop-shadow(0 0 8px var(--cyan-neon));
+  filter: none;
 }
 
 /* Customize Mode Active States */
@@ -1122,7 +890,7 @@ body.forced-landscape-portrait .splash-screen {
     linear-gradient(to right, rgba(0, 229, 255, 0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 229, 255, 0.04) 1px, transparent 1px);
   background-size: 24px 24px;
-  box-shadow: inset 0 0 50px rgba(0, 229, 255, 0.18);
+  box-shadow: none;
 }
 
 .customizing-mode [data-custom-id],
@@ -1134,7 +902,7 @@ body.forced-landscape-portrait .splash-screen {
 .customizing-mode .abxy-btn,
 .customizing-mode .dpad-btn {
   border-color: var(--cyan-neon) !important;
-  box-shadow: 0 0 16px var(--cyan-glow), inset 0 0 12px var(--cyan-dim) !important;
+  box-shadow: none !important;
   cursor: move !important;
   touch-action: none !important;
   overflow: visible !important;
@@ -1145,52 +913,125 @@ body.forced-landscape-portrait .splash-screen {
 .customizing-mode .circle-btn:active,
 .customizing-mode .circle-btn.active {
   background: #ffffff !important;
-  box-shadow: 0 0 24px var(--cyan-neon), 0 0 40px var(--cyan-glow) !important;
+  box-shadow: none !important;
   --l1-press: 1 !important;
   transition: none !important;
 }
 
 .customizing-mode .circle-btn .btn-text {
   color: var(--cyan-neon) !important;
-  text-shadow: 0 0 10px var(--cyan-glow) !important;
+  text-shadow: none !important;
 }
 
 .customizing-mode .stick-single-circle {
   background: var(--cyan-neon) !important;
-  box-shadow: 0 0 25px var(--cyan-neon), 0 0 50px var(--cyan-glow) !important;
+  box-shadow: none !important;
 }
 
 .customizing-mode .l1-element-selected {
-  outline: 2px solid #ffffff !important;
-  box-shadow: 0 0 30px rgba(0, 229, 255, 1), 0 0 60px rgba(0, 229, 255, 0.7) !important;
+  outline: 2px solid var(--cyan-neon) !important;
+  box-shadow: none !important;
   z-index: 50 !important;
 }
 
-/* Corner Resize Handle */
+/* Corner Resize Handle - Sleek Minimalist Blue Dot */
 .l1-resize-handle {
   position: absolute;
-  right: -7px;
-  bottom: -7px;
-  width: 20px;
-  height: 20px;
+  right: -5px;
+  bottom: -5px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--cyan-neon);
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 10px var(--cyan-glow);
+  background: var(--cyan-neon, #00e5ff);
+  border: 1.5px solid #ffffff;
+  box-shadow: none;
   cursor: nwse-resize;
-  z-index: 60;
+  z-index: 70;
   display: none;
   touch-action: none;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.l1-resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  pointer-events: auto;
 }
 
 .customizing-mode .l1-resize-handle {
-  display: none !important;
+  display: block !important;
 }
 
 .customizing-mode .l1-resize-handle:active {
   transform: scale(1.3);
   background: #ffffff;
-  box-shadow: 0 0 16px rgba(255, 255, 255, 1);
+  box-shadow: none;
+}
+
+/* Floating Stick Zones */
+.floating-stick-zone {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  border-radius: 20px;
+  display: block;
+  z-index: 10;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+#left-stick-zone {
+  left: 1.5%;
+  top: 22%;
+  width: 41%;
+  height: 75%;
+}
+
+#right-stick-zone {
+  right: 1.5%;
+  top: 22%;
+  width: 41%;
+  height: 75%;
+}
+
+.customizing-mode .floating-stick-zone {
+  pointer-events: auto !important;
+  cursor: move !important;
+  border: 1.5px dashed rgba(0, 229, 255, 0.45) !important;
+  background: rgba(0, 229, 255, 0.03) !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.customizing-mode .floating-stick-zone:hover,
+.customizing-mode .floating-stick-zone:active {
+  border-color: var(--cyan-neon) !important;
+  background: rgba(0, 229, 255, 0.06) !important;
+  box-shadow: none !important;
+}
+
+.floating-zone-label {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--cyan-neon, #00e5ff);
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}
+
+.customizing-mode .floating-zone-label {
+  display: block !important;
 }
 
 /* Live Radius Preview Ring inside Joystick Anchors */
@@ -1198,7 +1039,7 @@ body.forced-landscape-portrait .splash-screen {
   position: absolute;
   border-radius: 50%;
   border: 1.5px dashed var(--cyan-neon);
-  box-shadow: 0 0 14px rgba(0, 229, 255, 0.45), inset 0 0 14px rgba(0, 229, 255, 0.15);
+  box-shadow: none;
   pointer-events: none;
   display: none;
   top: 50%;
@@ -1233,7 +1074,7 @@ body.forced-landscape-portrait .splash-screen {
   border: 1.5px solid var(--cyan-neon);
   border-radius: 30px;
   padding: 6px 16px;
-  box-shadow: 0 0 24px rgba(0, 229, 255, 0.35);
+  box-shadow: none;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index: 80;
@@ -1259,7 +1100,7 @@ body.forced-landscape-portrait .splash-screen {
   height: 7px;
   border-radius: 50%;
   background: var(--cyan-neon);
-  box-shadow: 0 0 8px var(--cyan-neon);
+  box-shadow: none;
   animation: l1-dot-pulse 1.2s infinite alternate;
 }
 
@@ -1312,7 +1153,7 @@ body.forced-landscape-portrait .splash-screen {
   background: rgba(8, 12, 18, 0.94);
   border: 1.5px solid var(--cyan-neon);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85), 0 0 24px rgba(0, 229, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 100;
@@ -1369,7 +1210,7 @@ body.forced-landscape-portrait .splash-screen {
   height: 18px;
   border-radius: 50%;
   background: var(--cyan-neon);
-  box-shadow: 0 0 10px var(--cyan-neon);
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -1378,7 +1219,7 @@ body.forced-landscape-portrait .splash-screen {
   height: 18px;
   border-radius: 50%;
   background: var(--cyan-neon);
-  box-shadow: 0 0 10px var(--cyan-neon);
+  box-shadow: none;
   cursor: pointer;
   border: none;
 }

@@ -103,7 +103,8 @@ async def handle_terminal_commands(server: ControllerGatewayServer, cmd_queue: a
                 print("  stop           - Immediately stop active vibration")
                 print("  p, pulse       - Pulse button A on Player 1 to register tester")
                 print("  status         - Show active player slots")
-                print("  q, quit        - Gracefully shutdown\n")
+                print("  q, quit        - Gracefully shutdown")
+                print("  Note: Open /vibration_test.html on your phone for isolated haptic lab.\n")
             else:
                 print(f"[?] Unknown command '{cmd}'. Type 'help' for available commands.")
         except asyncio.CancelledError:

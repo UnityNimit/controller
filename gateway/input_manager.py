@@ -4,31 +4,103 @@ Supports ViGEmBus Native Xbox 360 virtual controllers with graceful fallback to
 Windows SendInput Keyboard/Mouse and Mock Testing backends.
 """
 
+import os
+import sys
+import subprocess
 import logging
 import platform
 import ctypes
 import time
+import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List, Any, Tuple
 
+try:
+    import winreg
+except ImportError:
+    winreg = None
+
 logger = logging.getLogger("Controller.Input")
 
-# Detect ViGEmBus Driver Availability
+
+def is_vigem_driver_installed() -> bool:
+    """Checks if the ViGEmBus kernel driver is installed on the Windows host system."""
+    if platform.system() != "Windows":
+        return False
+    # 1. Check registry service entry
+    if winreg is not None:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\ViGEmBus")
+            winreg.CloseKey(key)
+            return True
+        except Exception:
+            pass
+    # 2. Check kernel driver binary in System32\drivers
+    sys_path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "drivers", "ViGEmBus.sys")
+    if os.path.exists(sys_path):
+        return True
+    # 3. Check service manager via sc.exe
+    try:
+        res = subprocess.run(["sc.exe", "query", "ViGEmBus"], capture_output=True, text=True, timeout=3)
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def ensure_vigem_active() -> bool:
+    """
+    Verifies that the ViGEmBus kernel driver is operational.
+    If the driver is installed but in STOPPED state, attempts to start it automatically.
+    Purges stale vgamepad Python module state so VBUS binds cleanly to the running driver.
+    """
+    if platform.system() != "Windows":
+        return False
+
+    installed = is_vigem_driver_installed()
+    if not installed:
+        return False
+
+    # Check if the kernel driver service is running; if stopped, start it
+    try:
+        res = subprocess.run(["sc.exe", "query", "ViGEmBus"], capture_output=True, text=True, timeout=3)
+        if "RUNNING" not in res.stdout:
+            subprocess.run(["sc.exe", "start", "ViGEmBus"], capture_output=True, timeout=5)
+            time.sleep(0.4)
+    except Exception as e:
+        logger.debug(f"ViGEm service query/start note: {e}")
+
+    # Purge any cached vgamepad modules to ensure fresh VBus binding
+    for mod_name in list(sys.modules.keys()):
+        if mod_name.startswith("vgamepad"):
+            del sys.modules[mod_name]
+
+    try:
+        import vgamepad as vg
+        _probe = vg.VX360Gamepad()
+        del _probe
+        return True
+    except Exception as e:
+        logger.debug(f"ViGEmBus probe verification failed: {e}")
+        return False
+
+
+# Detect ViGEmBus Driver Availability on module load
 VIGEM_AVAILABLE = False
 try:
     if platform.system() == "Windows":
-        import vgamepad as vg
-        # Test creating and destroying a probe instance to verify kernel driver bus connection
-        _probe = vg.VX360Gamepad()
-        del _probe
-        VIGEM_AVAILABLE = True
-        logger.info("ViGEmBus kernel driver detected. Native XInput emulation ENABLED.")
+        VIGEM_AVAILABLE = ensure_vigem_active()
+        if VIGEM_AVAILABLE:
+            logger.info("ViGEmBus kernel driver detected and active. Native XInput emulation ENABLED.")
+        else:
+            logger.warning(
+                "ViGEmBus driver not active. Falling back to Keyboard emulation. "
+                "Click 'INSTALL DRIVER' on the dashboard to enable native Xbox 360 controller emulation for all PC games."
+            )
 except Exception as e:
     VIGEM_AVAILABLE = False
-    logger.warning(
-        f"ViGEmBus driver not active ({e}). Falling back to Keyboard emulation. "
-        f"Click '⚡ INSTALL DRIVER' on the dashboard to enable native Xbox 360 controller emulation for all PC games."
-    )
+    logger.warning(f"ViGEmBus driver initialization note: {e}")
 
 
 class AbstractGamepad(ABC):
@@ -138,42 +210,14 @@ class ViGEmXInputGamepad(AbstractGamepad):
             logger.warning(f"Could not register ViGEm rumble notification for Player {self.player_index + 1}: {e}")
 
     def set_stick(self, x_val: int, y_val: int = 0) -> None:
-        if x_val == 0 and y_val == 0:
-            self.gamepad.left_joystick(x_value=0, y_value=0)
-            return
-        import math
         clamped_x = max(-32768, min(32767, int(x_val)))
         clamped_y = max(-32768, min(32767, int(y_val)))
-        mag = math.hypot(clamped_x, clamped_y)
-        noise_floor = 1200  # Minimal ~3.6% noise floor to prevent resting touch jitter
-        if mag < noise_floor:
-            final_x = 0
-            final_y = 0
-        else:
-            scale = (mag - noise_floor) / (32767.0 - noise_floor)
-            scale = min(1.0, max(0.0, scale))
-            final_x = int((clamped_x / mag) * scale * 32767)
-            final_y = int((clamped_y / mag) * scale * 32767)
-        self.gamepad.left_joystick(x_value=final_x, y_value=final_y)
+        self.gamepad.left_joystick(x_value=clamped_x, y_value=clamped_y)
 
     def set_right_stick(self, x_val: int, y_val: int = 0) -> None:
-        if x_val == 0 and y_val == 0:
-            self.gamepad.right_joystick(x_value=0, y_value=0)
-            return
-        import math
         clamped_x = max(-32768, min(32767, int(x_val)))
         clamped_y = max(-32768, min(32767, int(y_val)))
-        mag = math.hypot(clamped_x, clamped_y)
-        noise_floor = 1200  # Minimal ~3.6% noise floor to prevent resting touch jitter
-        if mag < noise_floor:
-            final_x = 0
-            final_y = 0
-        else:
-            scale = (mag - noise_floor) / (32767.0 - noise_floor)
-            scale = min(1.0, max(0.0, scale))
-            final_x = int((clamped_x / mag) * scale * 32767)
-            final_y = int((clamped_y / mag) * scale * 32767)
-        self.gamepad.right_joystick(x_value=final_x, y_value=final_y)
+        self.gamepad.right_joystick(x_value=clamped_x, y_value=clamped_y)
 
     def set_steering(self, val: int) -> None:
         self.set_stick(val, 0)
@@ -235,6 +279,10 @@ class KeyboardFallbackGamepad(AbstractGamepad):
     VK_Q = 0x51
     VK_E = 0x45
     VK_H = 0x48
+    VK_UP = 0x26
+    VK_DOWN = 0x28
+    VK_LEFT = 0x25
+    VK_RIGHT = 0x27
 
     def __init__(self, player_index: int = 0):
         self.player_index = player_index
@@ -266,9 +314,39 @@ class KeyboardFallbackGamepad(AbstractGamepad):
 
     def set_stick(self, x_val: int, y_val: int = 0) -> None:
         self.set_steering(x_val)
+        thresh = 8000
+        if y_val > thresh:
+            self._press_key(self.VK_W)
+            self._release_key(self.VK_S)
+        elif y_val < -thresh:
+            self._press_key(self.VK_S)
+            self._release_key(self.VK_W)
+        else:
+            self._release_key(self.VK_W)
+            self._release_key(self.VK_S)
 
     def set_right_stick(self, x_val: int, y_val: int = 0) -> None:
-        pass
+        thresh = 8000
+        if x_val < -thresh:
+            self._press_key(self.VK_LEFT)
+            self._release_key(self.VK_RIGHT)
+        elif x_val > thresh:
+            self._press_key(self.VK_RIGHT)
+            self._release_key(self.VK_LEFT)
+        else:
+            self._release_key(self.VK_LEFT)
+            self._release_key(self.VK_RIGHT)
+
+        if y_val > thresh:
+            self._press_key(self.VK_UP)
+            self._release_key(self.VK_DOWN)
+        elif y_val < -thresh:
+            self._press_key(self.VK_DOWN)
+            self._release_key(self.VK_UP)
+        else:
+            self._release_key(self.VK_UP)
+            self._release_key(self.VK_DOWN)
+
 
     def set_throttle(self, val: int) -> None:
         if val > 40:
@@ -326,6 +404,7 @@ class MockGamepad(AbstractGamepad):
     """In-memory telemetry mock controller for automated test suites and headless verification."""
     def __init__(self, player_index: int = 0):
         self.player_index = player_index
+        self.is_mock = True
         self.steering: int = 0
         self.stick_y: int = 0
         self.throttle: int = 0
@@ -387,6 +466,7 @@ class InputManager:
     def __init__(self, force_mock: bool = False, max_players: int = 4):
         self.max_players = max_players
         self.force_mock = force_mock
+        self._dispatch_lock = threading.RLock()
         # Active slot mappings: slot_index (0..3) -> client_id (str)
         self.slots: List[Optional[str]] = [None] * max_players
         # Persistent device lease table: client_id -> slot_index
@@ -399,6 +479,23 @@ class InputManager:
         self.controllers: List[AbstractGamepad] = []
         
         self._init_controllers()
+
+        # Pillar 1: Dedicated Virtual Hardware MCU Dispatch Engine (1000 Hz - 5000 Hz)
+        self.mcu_dispatcher = None
+        if not self.force_mock:
+            try:
+                from gateway.mcu_dispatch import VirtualMcuDispatcher
+                from config import settings
+                self.mcu_dispatcher = VirtualMcuDispatcher(
+                    controllers=self.controllers,
+                    target_hz=getattr(settings.mcu, "DISPATCH_RATE_HZ", 1000.0),
+                    enable_hybrid_spinlock=getattr(settings.mcu, "ENABLE_HYBRID_SPINLOCK", True),
+                    max_slots=self.max_players
+                )
+                if getattr(settings.mcu, "AUTO_START", True):
+                    self.mcu_dispatcher.start()
+            except Exception as e:
+                logger.warning(f"Could not initialize Virtual MCU Dispatcher: {e}")
 
     def set_rumble_callback(self, cb) -> None:
         """Sets external force-feedback callback for relaying XInput rumble to clients."""
@@ -494,34 +591,42 @@ class InputManager:
         Atomically swaps the two controller slots and their device assignments.
         Returns (client_a, client_b) so callers can notify clients of their new slots.
         """
-        if not (0 <= slot_a < self.max_players and 0 <= slot_b < self.max_players):
-            return None, None
-        if slot_a == slot_b:
-            return self.slots[slot_a], self.slots[slot_b]
+        with self._dispatch_lock:
+            if not (0 <= slot_a < self.max_players and 0 <= slot_b < self.max_players):
+                return None, None
+            if slot_a == slot_b:
+                return self.slots[slot_a], self.slots[slot_b]
 
-        client_a = self.slots[slot_a]
-        client_b = self.slots[slot_b]
+            client_a = self.slots[slot_a]
+            client_b = self.slots[slot_b]
 
-        self.slots[slot_a] = client_b
-        self.slots[slot_b] = client_a
+            self.slots[slot_a] = client_b
+            self.slots[slot_b] = client_a
 
-        if client_a:
-            self._client_leases[client_a] = slot_b
-        if client_b:
-            self._client_leases[client_b] = slot_a
+            if client_a:
+                self._client_leases[client_a] = slot_b
+            if client_b:
+                self._client_leases[client_b] = slot_a
 
-        self.controllers[slot_a].reset()
-        self.controllers[slot_b].reset()
+            if getattr(self, "mcu_dispatcher", None) is not None:
+                self.mcu_dispatcher.reset_slot(slot_a)
+                self.mcu_dispatcher.reset_slot(slot_b)
 
-        logger.info(f"Swapped Player {slot_a + 1} ({client_a}) with Player {slot_b + 1} ({client_b})")
-        return client_a, client_b
+            self.controllers[slot_a].reset()
+            self.controllers[slot_b].reset()
+
+            logger.info(f"Swapped Player {slot_a + 1} ({client_a}) with Player {slot_b + 1} ({client_b})")
+            return client_a, client_b
 
     def release_slot(self, client_id: str) -> Optional[int]:
         """Frees the controller slot allocated to client_id while preserving device lease."""
         for idx, owner in enumerate(self.slots):
             if owner == client_id:
                 self.slots[idx] = None
-                self.controllers[idx].reset()
+                if getattr(self, "mcu_dispatcher", None) is not None:
+                    self.mcu_dispatcher.reset_slot(idx)
+                if 0 <= idx < len(self.controllers):
+                    self.controllers[idx].reset()
                 self._last_input_time.pop(client_id, None)
                 logger.info(f"Released Player {idx + 1} slot from client [{client_id[:8]}]")
                 if all(s is None for s in self.slots):
@@ -537,20 +642,29 @@ class InputManager:
 
     def tick_watchdog(self, timeout_sec: float = 0.120) -> None:
         """Deadman's switch: resets virtual controls to neutral if client becomes silent for >120ms."""
-        now = time.time()
+        now = time.perf_counter()
         for idx, client_id in enumerate(self.slots):
             if client_id is not None:
                 last_time = self._last_input_time.get(client_id, 0.0)
                 if last_time > 0 and (now - last_time) > timeout_sec:
-                    ctrl = self.controllers[idx]
-                    ctrl.set_stick(0, 0)
-                    ctrl.set_right_stick(0, 0)
-                    ctrl.set_throttle(0)
-                    ctrl.set_brake(0)
-                    ctrl.update()
+                    if getattr(self, "mcu_dispatcher", None) is not None:
+                        self.mcu_dispatcher.reset_slot(idx)
+                    if 0 <= idx < len(self.controllers):
+                        ctrl = self.controllers[idx]
+                        ctrl.set_stick(0, 0)
+                        ctrl.set_right_stick(0, 0)
+                        ctrl.set_throttle(0)
+                        ctrl.set_brake(0)
+                        ctrl.update()
                     self._last_input_time[client_id] = 0.0
 
-    def dispatch(self, client_id: str, control_state: Dict[str, Any]) -> bool:
+    def dispatch(
+        self,
+        client_id: str,
+        control_state: Dict[str, Any],
+        timestamp: Optional[float] = None,
+        rtt_ms: float = 5.0
+    ) -> bool:
         """
         Dispatches parsed sensor controls to the assigned OS virtual controller.
         Expected control_state dict keys:
@@ -559,40 +673,49 @@ class InputManager:
             - brake: int [0, 255]
             - buttons: dict of {name: bool}
         """
-        slot = self.get_slot(client_id)
-        if slot is None:
-            return False
+        with self._dispatch_lock:
+            slot = self.get_slot(client_id)
+            if slot is None or slot < 0 or slot >= len(self.controllers):
+                return False
 
-        self._last_input_time[client_id] = time.time()
-        ctrl = self.controllers[slot]
-        if "stick_x" in control_state or "stick_y" in control_state:
-            sx = control_state.get("stick_x", 0)
-            sy = control_state.get("stick_y", 0)
-            if hasattr(ctrl, "set_stick"):
-                ctrl.set_stick(sx, sy)
-            else:
-                ctrl.set_steering(sx)
-        if "right_stick_x" in control_state or "right_stick_y" in control_state:
-            rx = control_state.get("right_stick_x", 0)
-            ry = control_state.get("right_stick_y", 0)
-            if hasattr(ctrl, "set_right_stick"):
-                ctrl.set_right_stick(rx, ry)
-        if "throttle" in control_state:
-            ctrl.set_throttle(control_state["throttle"])
-        if "brake" in control_state:
-            ctrl.set_brake(control_state["brake"])
-        if "buttons" in control_state:
-            for btn_name, pressed in control_state["buttons"].items():
-                ctrl.set_button(btn_name, pressed)
+            t = timestamp if timestamp is not None else time.perf_counter()
+            self._last_input_time[client_id] = t
+            ctrl = self.controllers[slot]
+            try:
+                if "stick_x" in control_state or "stick_y" in control_state:
+                    sx = control_state.get("stick_x", 0)
+                    sy = control_state.get("stick_y", 0)
+                    if hasattr(ctrl, "set_stick"):
+                        ctrl.set_stick(sx, sy)
+                    else:
+                        ctrl.set_steering(sx)
+                if "right_stick_x" in control_state or "right_stick_y" in control_state:
+                    rx = control_state.get("right_stick_x", 0)
+                    ry = control_state.get("right_stick_y", 0)
+                    if hasattr(ctrl, "set_right_stick"):
+                        ctrl.set_right_stick(rx, ry)
+                if "throttle" in control_state:
+                    ctrl.set_throttle(control_state["throttle"])
+                if "brake" in control_state:
+                    ctrl.set_brake(control_state["brake"])
+                if "buttons" in control_state:
+                    for btn_name, pressed in control_state["buttons"].items():
+                        ctrl.set_button(btn_name, pressed)
 
-        ctrl.update()
-        return True
+                # Pillar 1 & 2: Asynchronous high-rate dispatch via Virtual MCU Engine
+                if getattr(self, "mcu_dispatcher", None) is not None and self.mcu_dispatcher._running:
+                    self.mcu_dispatcher.update_slot_input(slot, control_state, timestamp=t, rtt_ms=rtt_ms)
+                else:
+                    ctrl.update()
+            except Exception as e:
+                logger.debug(f"Transient dispatch error on slot {slot}: {e}")
+
+            return True
 
     def pulse_test_button(self, slot_idx: int) -> None:
         """Sends a momentary Button A press (for 120ms) on slot_idx and triggers a test rumble burst."""
         if 0 <= slot_idx < len(self.controllers):
             ctrl = self.controllers[slot_idx]
-            import threading
             def _pulse():
                 try:
                     ctrl.set_button("A", True)
@@ -611,29 +734,76 @@ class InputManager:
             threading.Thread(target=_pulse, daemon=True, name=f"PulseTest-P{slot_idx+1}").start()
 
     def reinit_controllers(self) -> bool:
-        """Attempts to re-detect ViGEmBus driver and upgrade controllers from keyboard fallback to native Xbox 360."""
+        """
+        Safely upgrades controllers from keyboard fallback to native ViGEmBus Xbox 360.
+        Performs an atomic swap under self._dispatch_lock so active streams are never interrupted,
+        never encounter empty controller lists, and never drop client connections.
+        """
         global VIGEM_AVAILABLE
-        if platform.system() == "Windows":
-            try:
-                import vgamepad as vg
-                _probe = vg.VX360Gamepad()
-                del _probe
-                VIGEM_AVAILABLE = True
-                logger.info("ViGEmBus driver successfully detected during re-initialization.")
-            except Exception as e:
-                logger.warning(f"ViGEmBus still unavailable: {e}")
-                return False
+        if self.force_mock:
+            return False
 
-        if VIGEM_AVAILABLE:
-            for ctrl in self.controllers:
-                ctrl.close()
-            self.controllers.clear()
-            self._init_controllers()
+        if platform.system() == "Windows":
+            if not ensure_vigem_active():
+                logger.warning("ViGEmBus driver is not active or could not be initialized.")
+                return False
+            VIGEM_AVAILABLE = True
+            logger.info("ViGEmBus driver confirmed active for hot-swap upgrade.")
+        else:
+            return False
+
+        # Construct new native controllers completely BEFORE touching the active controllers
+        new_controllers: List[AbstractGamepad] = []
+        try:
+            for i in range(self.max_players):
+                ctrl = ViGEmXInputGamepad(player_index=i, on_rumble=self.rumble_callback)
+                new_controllers.append(ctrl)
+        except Exception as e:
+            logger.warning(f"Failed to instantiate new ViGEm controllers during hot-swap: {e}")
+            for c in new_controllers:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            return False
+
+        if len(new_controllers) != self.max_players:
+            return False
+
+        # Atomically swap controllers under the dispatch lock
+        old_controllers: List[AbstractGamepad] = []
+        with self._dispatch_lock:
+            old_controllers = list(self.controllers)
+            self.controllers = new_controllers
+
+            # Atomically update MCU Dispatcher's reference
+            if getattr(self, "mcu_dispatcher", None) is not None:
+                self.mcu_dispatcher.controllers = self.controllers
+
+            # Re-register rumble callbacks if configured
             if self.rumble_callback is not None:
                 self.set_rumble_callback(self.rumble_callback)
-            return True
-        return False
+
+        # Close old controllers asynchronously in a background thread to prevent blocking dispatch
+        def _cleanup_old():
+            time.sleep(0.15)
+            for old_c in old_controllers:
+                try:
+                    old_c.close()
+                except Exception:
+                    pass
+
+        threading.Thread(target=_cleanup_old, daemon=True, name="OldControllerCleanup").start()
+        logger.info("Successfully hot-swapped controllers to ViGEmBus Native Xbox 360 with zero downtime.")
+        return True
 
     def shutdown(self) -> None:
-        for ctrl in self.controllers:
-            ctrl.close()
+        with self._dispatch_lock:
+            if getattr(self, "mcu_dispatcher", None) is not None:
+                self.mcu_dispatcher.stop()
+            for ctrl in self.controllers:
+                try:
+                    ctrl.close()
+                except Exception:
+                    pass
+

@@ -156,18 +156,11 @@ class TelemetryBridge:
             except Exception as e:
                 logging.getLogger("Controller.Bridge").debug(f"Test rumble error: {e}")
 
-    def swap_slots(self, slot_a: int, slot_b: int) -> bool:
-        """Atomically swaps two player slots in GUI and notifies gateway server."""
+    def _swap_slot_states_only(self, slot_a: int, slot_b: int) -> bool:
+        """Swaps internal GUI slot state objects without invoking swap_slots_callback."""
         if not (0 <= slot_a < 4 and 0 <= slot_b < 4) or slot_a == slot_b:
             return False
 
-        if self.swap_slots_callback is not None:
-            try:
-                self.swap_slots_callback(slot_a, slot_b)
-            except Exception as e:
-                logging.getLogger("Controller.Bridge").error(f"Error in swap_slots_callback: {e}")
-
-        # Swap the entire slot state objects
         self.slots[slot_a], self.slots[slot_b] = self.slots[slot_b], self.slots[slot_a]
         self.slots[slot_a].slot_index = slot_a
         self.slots[slot_b].slot_index = slot_b
@@ -176,11 +169,28 @@ class TelemetryBridge:
         self.slots[slot_a].player_color = player_colors[slot_a % 4]
         self.slots[slot_b].player_color = player_colors[slot_b % 4]
 
-        # Swap rate tracking queues
         self._last_packet_times[slot_a], self._last_packet_times[slot_b] = (
             self._last_packet_times[slot_b],
             self._last_packet_times[slot_a]
         )
+        return True
+
+    def swap_slots(self, slot_a: int, slot_b: int) -> bool:
+        """Atomically swaps two player slots in GUI and notifies gateway server."""
+        if not (0 <= slot_a < 4 and 0 <= slot_b < 4) or slot_a == slot_b:
+            return False
+
+        self._swap_slot_states_only(slot_a, slot_b)
+
+        if self.swap_slots_callback is not None:
+            try:
+                try:
+                    self.swap_slots_callback(slot_a, slot_b, _from_bridge=True)
+                except TypeError:
+                    self.swap_slots_callback(slot_a, slot_b)
+            except Exception as e:
+                logging.getLogger("Controller.Bridge").error(f"Error in swap_slots_callback: {e}")
+
         return True
 
     def reinit_driver(self) -> bool:
@@ -287,6 +297,9 @@ class TelemetryBridge:
         # Update slot state
         if 0 <= slot_index < 4:
             slot = self.slots[slot_index]
+            if not slot.connected or slot.client_id != client_id:
+                slot.connected = True
+                slot.client_id = client_id
             slot.last_seen = now
             slot.total_packets += 1
             slot.rtt_ms = client_rtt

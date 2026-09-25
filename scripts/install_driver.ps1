@@ -26,5 +26,6 @@ Write-Host "[+] Found ViGEmBus Installer: $msiPath" -ForegroundColor Green
 Write-Host "[*] Requesting Administrator elevation to install Windows Kernel Driver..." -ForegroundColor Cyan
 
 Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /passive /norestart" -Verb RunAs -Wait
+Start-Process sc.exe -ArgumentList "start ViGEmBus" -Verb RunAs -Wait
 
-Write-Host "[OK] ViGEmBus installation completed! Native virtual Xbox 360 controllers are now active." -ForegroundColor Green
+Write-Host "[OK] ViGEmBus installation completed and service started! Native virtual Xbox 360 controllers are now active." -ForegroundColor Green

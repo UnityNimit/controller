@@ -22,66 +22,24 @@ import websockets
 from websockets.server import WebSocketServerProtocol
 
 # ---------------------------------------------------------------------------
-# Zero-Copy 24-Byte Binary Micro-Packet Wire Protocol (v2)
+# Zero-Copy 24-Byte Binary Micro-Packet Wire Protocol (v2) - Pillar 4
 # ---------------------------------------------------------------------------
-BINARY_PACKET_MAGIC = 0x43  # ASCII 'C' for Controller
-BINARY_PACKET_VERSION = 0x02
-BINARY_PACKET_SIZE = 24
-BINARY_STRUCT = struct.Struct("<BBHIhhhhBBHhBB")
+from gateway.kernel_transport import (
+    BINARY_PACKET_MAGIC,
+    BINARY_PACKET_VERSION,
+    BINARY_PACKET_SIZE,
+    BINARY_STRUCT,
+    KernelTransportTuner,
+    FastBinaryDecoder
+)
 
 
 def decode_binary_packet(packet_bytes: bytes) -> Optional[Dict[str, Any]]:
     """
     Decodes a 24-byte packed binary micro-packet into normalized controller state.
-    Achieves zero-heap deserialization in < 0.8 microseconds.
+    Achieves sub-microsecond zero-heap deserialization via FastBinaryDecoder.
     """
-    if len(packet_bytes) < BINARY_PACKET_SIZE:
-        return None
-    try:
-        magic, version, seq, ts_ms, sx, sy, rx, ry, th_b, br_b, btn_mask, angle_x100, flags, rtt_b = BINARY_STRUCT.unpack_from(packet_bytes)
-    except Exception:
-        return None
-
-    if magic != BINARY_PACKET_MAGIC or version != BINARY_PACKET_VERSION:
-        return None
-
-    buttons = {
-        "A": bool(btn_mask & (1 << 0)),
-        "B": bool(btn_mask & (1 << 1)),
-        "X": bool(btn_mask & (1 << 2)),
-        "Y": bool(btn_mask & (1 << 3)),
-        "LB": bool(btn_mask & (1 << 4)),
-        "RB": bool(btn_mask & (1 << 5)),
-        "LT": bool(btn_mask & (1 << 6)),
-        "RT": bool(btn_mask & (1 << 7)),
-        "START": bool(btn_mask & (1 << 8)),
-        "BACK": bool(btn_mask & (1 << 9)),
-        "LS": bool(btn_mask & (1 << 10)),
-        "RS": bool(btn_mask & (1 << 11)),
-        "DPAD_UP": bool(btn_mask & (1 << 12)),
-        "DPAD_DOWN": bool(btn_mask & (1 << 13)),
-        "DPAD_LEFT": bool(btn_mask & (1 << 14)),
-        "DPAD_RIGHT": bool(btn_mask & (1 << 15)),
-    }
-    gyro_enabled = bool(flags & 0x01)
-    angle_deg = float(angle_x100) / 100.0
-
-    return {
-        "type": "INPUT",
-        "seq": seq,
-        "ts": float(ts_ms) / 1000.0,
-        "stick_x": sx,
-        "stick_y": sy,
-        "right_stick_x": rx,
-        "right_stick_y": ry,
-        "throttle": float(th_b) / 255.0,
-        "brake": float(br_b) / 255.0,
-        "buttons": buttons,
-        "gyro_enabled": gyro_enabled,
-        "angle": angle_deg,
-        "rtt": float(rtt_b),
-        "protocol": "BINARY v2"
-    }
+    return FastBinaryDecoder.decode(packet_bytes)
 
 from config import settings
 from gateway.filters import SensorFusionPipeline
@@ -306,7 +264,9 @@ class ControllerGatewayServer:
                 "OK",
                 Headers([
                     ("Content-Type", content_type),
-                    ("Cache-Control", "no-cache"),
+                    ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+                    ("Pragma", "no-cache"),
+                    ("Expires", "0"),
                     ("Access-Control-Allow-Origin", "*")
                 ]),
                 body
@@ -318,6 +278,9 @@ class ControllerGatewayServer:
         """Handles full lifecycle for a connected mobile edge node."""
         client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
         logger.info(f"Incoming connection from {client_ip}")
+
+        # Pillar 4: Ultra-Low-Latency Kernel Socket Tuning (TCP_NODELAY + Anti-Bufferbloat)
+        KernelTransportTuner.tune_websocket(websocket)
 
         # Phase 1: Authentication Handshake
         challenge = self.authenticator.generate_challenge(client_hint=client_ip)
@@ -383,6 +346,7 @@ class ControllerGatewayServer:
             )
             self.active_clients[websocket] = client_id
             self.client_sockets[client_id] = websocket
+            self.firewall.reset_client(client_id)
 
             # Send Auth Success with Player Slot & Theme Color
             player_color = settings.clients.PLAYER_COLORS[player_slot % len(settings.clients.PLAYER_COLORS)]
@@ -446,18 +410,21 @@ class ControllerGatewayServer:
 
                     pipeline = self.pipelines[client_id]
 
-                    # Process Steering & Thumbstick
-                    if data.get("gyro_enabled", True) and "angle" in data:
+                    # Process Steering & Thumbstick (Manual thumbstick always takes priority over gyro)
+                    manual_sx = int(data.get("stick_x", 0))
+                    manual_sy = int(data.get("stick_y", 0))
+                    if data.get("gyro_enabled", False) and "angle" in data and abs(manual_sx) <= 500 and abs(manual_sy) <= 500:
                         raw_angle = float(data.get("angle", 0.0))
                         stick_x, filtered_angle, _ = pipeline.process_steering(raw_angle)
                     else:
                         raw_angle = 0.0
                         filtered_angle = 0.0
-                        stick_x = int(data.get("stick_x", 0))
+                        stick_x = manual_sx
 
-                    stick_y = int(data.get("stick_y", 0))
+                    stick_y = manual_sy
                     right_stick_x = int(data.get("right_stick_x", 0))
                     right_stick_y = int(data.get("right_stick_y", 0))
+
 
                     # Process Triggers (Gas & Brake)
                     raw_th = float(data.get("throttle", 0.0))
@@ -481,7 +448,10 @@ class ControllerGatewayServer:
                     if self.input_manager.get_slot(client_id) is None:
                         self.input_manager.allocate_slot(client_id, preferred_slot=player_slot)
 
-                    self.input_manager.dispatch(client_id, control_state)
+                    # Arrival timestamp using high-resolution monotonic clock (matching Virtual MCU)
+                    arrival_ts = time.perf_counter()
+                    client_rtt = float(data.get("rtt", 5.0))
+                    self.input_manager.dispatch(client_id, control_state, timestamp=arrival_ts, rtt_ms=client_rtt)
 
                     # Record to QoS Flight Data Buffer
                     qos_rec = self.qos_recorder.record_uplink(
@@ -510,6 +480,24 @@ class ControllerGatewayServer:
                             filtered_angle=filtered_angle,
                             filter_mode=pipeline.filter_mode.upper()
                         )
+
+                elif msg_type == "SWITCH_SLOT":
+                    try:
+                        req_slot = max(0, min(self.input_manager.max_players - 1, int(data.get("slot", 1)) - 1))
+                    except Exception:
+                        req_slot = 0
+                    curr_slot = self.input_manager.get_slot(client_id)
+                    if curr_slot is not None and curr_slot != req_slot:
+                        self.swap_player_slots(curr_slot, req_slot, _from_bridge=False)
+                        player_slot = req_slot
+                    else:
+                        actual_slot = curr_slot if curr_slot is not None else req_slot
+                        color = settings.clients.PLAYER_COLORS[actual_slot % len(settings.clients.PLAYER_COLORS)]
+                        await self._send_safe(websocket, json.dumps({
+                            "type": "SLOT_REASSIGNED",
+                            "player_slot": actual_slot + 1,
+                            "player_color": color
+                        }))
 
                 elif msg_type == "CALIBRATE":
                     angle = float(data.get("angle", 0.0))
@@ -550,21 +538,29 @@ class ControllerGatewayServer:
             pass
 
     def _resolve_target_ws_for_slot(self, slot_idx: int) -> Optional[Any]:
-        """Resolves target WebSocket for a slot with single-player fallback routing."""
+        """Resolves target WebSocket for a slot with robust fallback routing."""
         # 1. Direct slot targeting
         if 0 <= slot_idx < len(self.input_manager.slots):
             cid = self.input_manager.slots[slot_idx]
-            if cid and cid in self.client_sockets:
+            if cid and cid in self.client_sockets and self.client_sockets[cid]:
                 return self.client_sockets[cid]
 
-        # 2. Single-player fallback: if only 1 mobile client is active on the server,
-        # route any gamepad rumble to that client (handles games/testers targeting slot 0 or slot 1)
-        active_sockets = [
-            ws for cid, ws in self.client_sockets.items()
-            if ws and cid in self.input_manager.slots
-        ]
-        if len(active_sockets) == 1:
-            return active_sockets[0]
+        # 2. Fallback to Player 1 (Slot 0)
+        if len(self.input_manager.slots) > 0:
+            p1_cid = self.input_manager.slots[0]
+            if p1_cid and p1_cid in self.client_sockets and self.client_sockets[p1_cid]:
+                return self.client_sockets[p1_cid]
+
+        # 3. Fallback to any active authenticated client
+        for cid in self.input_manager.slots:
+            if cid and cid in self.client_sockets and self.client_sockets[cid]:
+                return self.client_sockets[cid]
+
+        # 4. Fallback to any connected client socket
+        for ws in self.client_sockets.values():
+            if ws:
+                return ws
+
         return None
 
     def _on_rumble_event(self, slot_idx: int, large_motor: int, small_motor: int) -> None:
@@ -590,21 +586,43 @@ class ControllerGatewayServer:
             "small": sm
         })
 
-        target_ws = self._resolve_target_ws_for_slot(slot_idx)
-        if target_ws is not None:
+        # Collect all active target websockets for this specific player slot
+        targets = set()
+        if 0 <= slot_idx < len(self.input_manager.slots):
+            cid = self.input_manager.slots[slot_idx]
+            if cid and cid in self.client_sockets and self.client_sockets[cid]:
+                targets.add(self.client_sockets[cid])
+
+        # Only fall back to all connected clients if this slot has no direct owner AND only 1 client is connected
+        if not targets and len(self.client_sockets) <= 1:
+            for ws in self.client_sockets.values():
+                if ws:
+                    targets.add(ws)
+            for ws in self.active_clients.keys():
+                if ws:
+                    targets.add(ws)
+
+        if not targets:
+            return
+
+        logger.debug(f"[HAPTICS] Dispatching RUMBLE (large={lm}, small={sm}) to {len(targets)} sockets")
+        for ws in targets:
             try:
-                asyncio.run_coroutine_threadsafe(self._send_safe(target_ws, msg), self.loop)
-                # If motors stopped (0, 0), send a follow-up confirmation after 25ms to ensure 100% arrival over Wi-Fi
-                if lm == 0 and sm == 0:
-                    import threading
-                    def _backup_stop():
-                        try:
-                            asyncio.run_coroutine_threadsafe(self._send_safe(target_ws, msg), self.loop)
-                        except Exception:
-                            pass
-                    threading.Timer(0.025, _backup_stop).start()
+                asyncio.run_coroutine_threadsafe(self._send_safe(ws, msg), self.loop)
             except Exception as e:
                 logger.debug(f"Rumble websocket dispatch error: {e}")
+
+        # Triple-redundant stop transmission: when motors stop (0, 0), re-verify delivery at +15ms and +40ms
+        if lm == 0 and sm == 0:
+            import threading
+            def _backup_stop():
+                for ws in targets:
+                    try:
+                        asyncio.run_coroutine_threadsafe(self._send_safe(ws, msg), self.loop)
+                    except Exception:
+                        pass
+            threading.Timer(0.015, _backup_stop).start()
+            threading.Timer(0.040, _backup_stop).start()
 
     def pulse_test_slot(self, slot_idx: int) -> None:
         """Pulses button A momentarily on the virtual controller to wake up browser gamepad testers."""
@@ -632,9 +650,19 @@ class ControllerGatewayServer:
                 self._on_rumble_event(slot_idx, 0, 0)
         threading.Thread(target=_test_pulse, daemon=True, name=f"TestRumble-P{slot_idx+1}").start()
 
-    def swap_player_slots(self, slot_a: int, slot_b: int) -> bool:
+    def swap_player_slots(self, slot_a: int, slot_b: int, _from_bridge: bool = False) -> bool:
         """Swaps controller assignments between slot_a and slot_b and notifies clients."""
+        if not (0 <= slot_a < self.input_manager.max_players and 0 <= slot_b < self.input_manager.max_players):
+            return False
+        if slot_a == slot_b:
+            return True
+
         client_a, client_b = self.input_manager.swap_slots(slot_a, slot_b)
+
+        if self.bridge is not None and not _from_bridge:
+            if hasattr(self.bridge, "_swap_slot_states_only"):
+                self.bridge._swap_slot_states_only(slot_a, slot_b)
+
         if getattr(self, "loop", None) is not None:
             if client_a and client_a in self.client_sockets:
                 ws = self.client_sockets[client_a]
@@ -647,6 +675,7 @@ class ControllerGatewayServer:
                     })),
                     self.loop
                 )
+                self.pulse_test_slot(slot_b)
             if client_b and client_b in self.client_sockets:
                 ws = self.client_sockets[client_b]
                 color_a = settings.clients.PLAYER_COLORS[slot_a % len(settings.clients.PLAYER_COLORS)]
@@ -658,6 +687,7 @@ class ControllerGatewayServer:
                     })),
                     self.loop
                 )
+                self.pulse_test_slot(slot_a)
         return True
 
     async def _downlink_telemetry_loop(self) -> None:
@@ -666,7 +696,7 @@ class ControllerGatewayServer:
         while self._running:
             start_t = time.perf_counter()
             # Tick deadman's switch watchdog to neutral-reset silent controllers
-            self.input_manager.tick_watchdog(0.120)
+            self.input_manager.tick_watchdog(0.350)
 
             if self.active_clients:
                 telem = self.latest_telemetry
@@ -701,20 +731,6 @@ class ControllerGatewayServer:
                 for ws in websockets_to_remove:
                     self.active_clients.pop(ws, None)
 
-            # Periodic 2Hz state sync for active rumble motors (maintains 100% sync for 5s, 10s, infinite rumble)
-            rumble_sync_counter = getattr(self, "_rumble_sync_counter", 0) + 1
-            self._rumble_sync_counter = rumble_sync_counter
-            if rumble_sync_counter % 30 == 0:
-                for s_idx, (r_lm, r_sm) in list(self._active_rumble.items()):
-                    if r_lm > 0 or r_sm > 0:
-                        t_ws = self._resolve_target_ws_for_slot(s_idx)
-                        if t_ws is not None:
-                            r_msg = json.dumps({"type": "RUMBLE", "large": r_lm, "small": r_sm})
-                            try:
-                                await self._send_safe(t_ws, r_msg)
-                            except Exception:
-                                pass
-
             elapsed = time.perf_counter() - start_t
             await asyncio.sleep(max(0.001, interval - elapsed))
 
@@ -733,6 +749,7 @@ class ControllerGatewayServer:
         print(f"  Telemetry     : UDP Port {settings.network.TELEMETRY_UDP_PORT} {'+ Synthetic Simulator ACTIVE' if self.enable_simulator else ''}")
         print(f"  Active Host IP: {primary_ip}")
         print(f"\n  >> CONNECT SMARTPHONE AT: {url}")
+        print(f"  >> VIBRATION TEST LAB   : {url}/vibration_test.html")
         print("-" * 78)
 
         # Print ASCII QR Code for instant phone camera scanning
@@ -782,6 +799,7 @@ class ControllerGatewayServer:
             port=self.port,
             ssl=ssl_context,
             process_request=self._handle_http_request,
+            compression=None,
             ping_interval=10,
             ping_timeout=5,
             max_size=2**20

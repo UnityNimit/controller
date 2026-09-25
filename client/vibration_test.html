@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Controller // Vibration & Haptics Lab</title>
+  <style>
+    :root {
+      --bg: #07080a;
+      --card-bg: #0e1117;
+      --card-border: #1c2230;
+      --accent: #2563eb;
+      --accent-glow: rgba(37, 99, 235, 0.35);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.35);
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.35);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    button, input, a {
+      touch-action: manipulation;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .title-wrap h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .title-wrap p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-top: 2px;
+    }
+    .nav-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+    .nav-btn:active {
+      background: #1e2536;
+      transform: scale(0.97);
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .status-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      background: #141923;
+      border: 1px solid var(--card-border);
+    }
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+    .badge-dot.active {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    .badge-dot.alert {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+    .meters-wrap {
+      display: flex;
+      gap: 12px;
+    }
+    .meter-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .meter-label {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    .meter-bar-track {
+      height: 12px;
+      background: #121620;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .meter-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      transition: width 0.08s ease-out;
+    }
+    .meter-bar-fill.heavy {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+      gap: 8px;
+    }
+    button {
+      background: #151a24;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 10px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      transition: background 0.1s, transform 0.08s, border-color 0.1s;
+    }
+    button span.sub {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+    button:active {
+      transform: scale(0.96);
+      background: #1e2636;
+      border-color: #3b82f6;
+    }
+    button.btn-emergency-stop {
+      background: #7f1d1d;
+      border-color: #dc2626;
+      color: #fee2e2;
+      font-weight: 700;
+    }
+    button.btn-emergency-stop:active {
+      background: #991b1b;
+    }
+    button.btn-infinite {
+      background: #064e3b;
+      border-color: #059669;
+      color: #d1fae5;
+    }
+    button.btn-infinite:active {
+      background: #047857;
+    }
+    .slider-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row label {
+      width: 85px;
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      color: var(--text-muted);
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 6px;
+      accent-color: #3b82f6;
+    }
+    .slider-row span.val {
+      width: 38px;
+      text-align: right;
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+    .log-box {
+      background: #06070a;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 0.70rem;
+      height: 140px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .log-line {
+      line-height: 1.35;
+      color: #94a3b8;
+    }
+    .log-line.hl {
+      color: #38bdf8;
+    }
+    .log-line.stop {
+      color: #f87171;
+    }
+    .log-line.sync {
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-wrap">
+      <h1>Haptics & Vibration Lab</h1>
+      <p>Dedicated Isolated Mobile Testing Environment</p>
+    </div>
+    <a href="/" class="nav-btn">🎮 Controller</a>
+  </header>
+
+  <!-- Device Capabilities & Live Meters -->
+  <div class="card">
+    <div class="card-title">
+      <span>Hardware Diagnostics</span>
+      <span id="txt-latency" style="font-family: var(--mono); font-size: 0.7rem;">RTT: -- ms</span>
+    </div>
+    <div class="status-row">
+      <div class="badge" id="badge-vibrate">
+        <div class="badge-dot" id="dot-vibrate"></div>
+        <span id="txt-vibrate">Vibrate: Checking...</span>
+      </div>
+      <div class="badge" id="badge-audio">
+        <div class="badge-dot" id="dot-audio"></div>
+        <span id="txt-audio">Audio: Initializing</span>
+      </div>
+      <div class="badge" id="badge-ws">
+        <div class="badge-dot" id="dot-ws"></div>
+        <span id="txt-ws">Server: Standalone</span>
+      </div>
+    </div>
+    <div class="meters-wrap">
+      <div class="meter-col">
+        <div class="meter-label">
+          <span>LARGE MOTOR (HEAVY)</span>
+          <span id="meter-val-large">0 / 255</span>
+        </div>
+        <div class="meter-bar-track">
+          <div class="meter-bar-fill heavy" id="bar-fill-large"></div>
+        </div>
+      </div>
+      <div class="meter-col">
+        <div class="meter-label">
+          <span>SMALL MOTOR (LIGHT)</span>
+          <span id="meter-val-small">0 / 255</span>
+        </div>
+        <div class="meter-bar-track">
+          <div class="meter-bar-fill" id="bar-fill-small"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- One-Touch Tactile Presets -->
+  <div class="card">
+    <div class="card-title">Tactile Presets & Clicks</div>
+    <div class="btn-grid">
+      <button onclick="testClick('normal')">
+        Light Click
+        <span class="sub">12ms / 180Hz</span>
+      </button>
+      <button onclick="testClick('dpad')">
+        D-Pad Click
+        <span class="sub">18ms / 150Hz</span>
+      </button>
+      <button onclick="testClick('heavy')">
+        Heavy Click
+        <span class="sub">28ms / 110Hz</span>
+      </button>
+      <button onclick="testTimedRumble(255, 255, 100)">
+        100ms Hit
+        <span class="sub">Max / Fast</span>
+      </button>
+      <button onclick="testTimedRumble(200, 200, 250)">
+        250ms Pulse
+        <span class="sub">Curb / Bump</span>
+      </button>
+      <button onclick="testTimedRumble(255, 180, 500)">
+        500ms Burst
+        <span class="sub">Tackle / Shot</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Full Duration & Continuous Testing -->
+  <div class="card">
+    <div class="card-title">Duration & Infinite Verification</div>
+    <div class="btn-grid">
+      <button onclick="testTimedRumble(255, 255, 1000)">
+        1.0s Rumble
+        <span class="sub">Full Intensity</span>
+      </button>
+      <button onclick="testTimedRumble(220, 180, 2000)">
+        2.0s Rumble
+        <span class="sub">Engine Redline</span>
+      </button>
+      <button onclick="testTimedRumble(255, 255, 5000)">
+        5.0s Rumble
+        <span class="sub">Off-road Strip</span>
+      </button>
+      <button onclick="testTimedRumble(255, 255, 10000)">
+        10.0s Rumble
+        <span class="sub">Sustained Drift</span>
+      </button>
+      <button class="btn-infinite" onclick="startInfinite()">
+        START INFINITE
+        <span class="sub">Uninterrupted</span>
+      </button>
+      <button class="btn-emergency-stop" onclick="stopAll()">
+        STOP IMMEDIATELY
+        <span class="sub">navigator.vibrate(0)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Manual Sliders & Audio Feedback -->
+  <div class="card">
+    <div class="card-title">Manual Motor Sliders & Acoustic Tuning</div>
+    <div class="slider-wrap">
+      <div class="slider-row">
+        <label for="sl-large">Large Motor:</label>
+        <input type="range" id="sl-large" min="0" max="255" value="255" oninput="updateSliderLabels()">
+        <span class="val" id="lbl-sl-large">255</span>
+      </div>
+      <div class="slider-row">
+        <label for="sl-small">Small Motor:</label>
+        <input type="range" id="sl-small" min="0" max="255" value="180" oninput="updateSliderLabels()">
+        <span class="val" id="lbl-sl-small">180</span>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 4px;">
+        <button style="flex: 1;" onclick="applySliders()">Apply Sliders (Continuous)</button>
+        <button style="flex: 1;" class="btn-emergency-stop" onclick="stopAll()">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Diagnostic Console -->
+  <div class="card">
+    <div class="card-title">
+      <span>Event Log</span>
+      <button style="padding: 2px 8px; font-size: 0.68rem;" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-box" id="log-box"></div>
+  </div>
+
+  <!-- Load Standalone Haptics Module -->
+  <script src="js/haptics.js?v=2.1.0"></script>
+  <script>
+    const haptics = new HapticAudioEngine();
+    let testTimer = null;
+    let ws = null;
+
+    const logBox = document.getElementById("log-box");
+    function log(msg, type = "normal") {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(" ")[0] + "." + String(now.getMilliseconds()).padStart(3, "0");
+      const line = document.createElement("div");
+      line.className = `log-line ${type}`;
+      line.textContent = `[${timeStr}] ${msg}`;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function clearLog() {
+      logBox.innerHTML = "";
+    }
+
+    // Diagnostics Detection
+    function updateDiagnostics() {
+      const dotVib = document.getElementById("dot-vibrate");
+      const txtVib = document.getElementById("txt-vibrate");
+      if (haptics.canVibrate) {
+        dotVib.className = "badge-dot active";
+        txtVib.textContent = "Vibrate: Supported";
+      } else {
+        dotVib.className = "badge-dot alert";
+        txtVib.textContent = "Vibrate: Unsupported (iOS)";
+      }
+
+      const dotAud = document.getElementById("dot-audio");
+      const txtAud = document.getElementById("txt-audio");
+      if (haptics.ctx && haptics.ctx.state === "running") {
+        dotAud.className = "badge-dot active";
+        txtAud.textContent = "Audio: Active";
+      } else if (haptics.ctx && haptics.ctx.state === "suspended") {
+        dotAud.className = "badge-dot";
+        txtAud.textContent = "Audio: Tap to Unlock";
+      } else {
+        dotAud.className = "badge-dot";
+        txtAud.textContent = "Audio: Ready";
+      }
+    }
+
+    // Live Motor Meter Updating
+    haptics.onRumbleChange = (large, small, isActive) => {
+      document.getElementById("meter-val-large").textContent = `${large} / 255`;
+      document.getElementById("meter-val-small").textContent = `${small} / 255`;
+      document.getElementById("bar-fill-large").style.width = `${(large / 255) * 100}%`;
+      document.getElementById("bar-fill-small").style.width = `${(small / 255) * 100}%`;
+      if (isActive) {
+        log(`RUMBLE ON: Large=${large}, Small=${small}`, "hl");
+      } else {
+        log(`RUMBLE STOPPED (0, 0)`, "stop");
+      }
+    };
+
+    function testClick(intensity) {
+      haptics.initAudio();
+      haptics.triggerClick(intensity);
+      log(`Triggered tactile click: ${intensity}`, "hl");
+      updateDiagnostics();
+    }
+
+    function testTimedRumble(large, small, durationMs) {
+      haptics.initAudio();
+      log(`Triggered timed rumble (${durationMs}ms): Large=${large}, Small=${small}`, "hl");
+      haptics.timedRumble(large, small, durationMs);
+      updateDiagnostics();
+    }
+
+    function startInfinite() {
+      haptics.initAudio();
+      const l = parseInt(document.getElementById("sl-large").value, 10);
+      const s = parseInt(document.getElementById("sl-small").value, 10);
+      log(`Continuous Infinite Rumble STARTED: Large=${l}, Small=${s}`, "hl");
+      haptics.handleRumble(l, s);
+      updateDiagnostics();
+    }
+
+    function stopAll() {
+      haptics.stopAllRumble();
+      log(`Immediate Stop invoked (all motors 0)`, "stop");
+      updateDiagnostics();
+    }
+
+    function updateSliderLabels() {
+      const l = document.getElementById("sl-large").value;
+      const s = document.getElementById("sl-small").value;
+      document.getElementById("lbl-sl-large").textContent = l;
+      document.getElementById("lbl-sl-small").textContent = s;
+    }
+
+    function applySliders() {
+      haptics.initAudio();
+      const l = parseInt(document.getElementById("sl-large").value, 10);
+      const s = parseInt(document.getElementById("sl-small").value, 10);
+      log(`Applying slider vibration: Large=${l}, Small=${s}`, "hl");
+      haptics.handleRumble(l, s);
+      updateDiagnostics();
+    }
+
+    // Zero-latency mobile touch activation: triggers instantly on finger contact (0ms) instead of waiting for 300ms click delay
+    function setupFastTouch() {
+      const buttons = document.querySelectorAll("button");
+      buttons.forEach(btn => {
+        let lastTrigger = 0;
+        const trigger = (e) => {
+          const now = performance.now();
+          if (now - lastTrigger < 350) {
+            e.preventDefault();
+            return;
+          }
+          lastTrigger = now;
+          if (typeof btn.onclick === "function") {
+            btn.onclick(e);
+            e.preventDefault();
+          }
+        };
+        btn.addEventListener("pointerdown", trigger, { passive: false });
+      });
+    }
+
+    // Optional Live Server Monitor (receives live PC gamepad rumble)
+    function initServerMonitor() {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const url = `${proto}//${location.host}/ws`;
+      try {
+        ws = new WebSocket(url);
+        ws.onopen = () => {
+          document.getElementById("dot-ws").className = "badge-dot active";
+          document.getElementById("txt-ws").textContent = "Server: Listening";
+          log("Connected to Gateway Server WebSocket. Listening for live game rumble...", "sync");
+        };
+        ws.onmessage = (evt) => {
+          try {
+            const msg = JSON.parse(evt.data);
+            if (msg.type === "RUMBLE") {
+              log(`Live Server Rumble: Large=${msg.large}, Small=${msg.small}`, "hl");
+              haptics.handleRumble(msg.large, msg.small);
+            } else if (msg.type === "AUTH_CHALLENGE") {
+              // Minimal monitor handshake
+              ws.send(JSON.stringify({
+                type: "AUTH_RESPONSE",
+                client_id: "vibration_lab_node",
+                nonce: msg.nonce,
+                timestamp: msg.timestamp,
+                signature: "",
+                preferred_slot: 1
+              }));
+            }
+          } catch (_) {}
+        };
+        ws.onclose = () => {
+          document.getElementById("dot-ws").className = "badge-dot";
+          document.getElementById("txt-ws").textContent = "Server: Offline";
+        };
+        ws.onerror = () => {
+          document.getElementById("dot-ws").className = "badge-dot alert";
+          document.getElementById("txt-ws").textContent = "Server: Error";
+        };
+      } catch (_) {}
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      updateDiagnostics();
+      setupFastTouch();
+      log("Haptics & Vibration Lab ready.");
+      initServerMonitor();
+    });
+  </script>
+</body>
+</html>

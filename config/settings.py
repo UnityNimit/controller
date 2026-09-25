@@ -105,12 +105,27 @@ class QoSConfig:
     EXPORT_CSV: bool = True
 
 
+@dataclass
+class McuConfig:
+    # Virtual MCU dispatch frequency in Hz (default 1000 Hz, scalable to 2000, 4000, 5000 Hz)
+    DISPATCH_RATE_HZ: float = 1000.0
+    # Enable high-resolution Windows multimedia timer and hybrid spinlock for sub-millisecond precision
+    ENABLE_HYBRID_SPINLOCK: bool = True
+    # MCU auto-start with controller manager
+    AUTO_START: bool = True
+    # Pillar 2: Real-time Hermite spline & 2nd-order Kalman micro-interpolation (sub-millisecond smoothing)
+    ENABLE_PREDICTIVE_INTERPOLATION: bool = True
+    # Dynamic latency compensation factor (extrapolates forward by RTT/2 * factor to cancel Wi-Fi lag)
+    LATENCY_COMPENSATION_FACTOR: float = 1.0
+
+
 # Unified Settings Instance
 network = NetworkConfig()
 filters = FilterConfig()
 security = SecurityConfig()
 clients = MultiClientConfig()
 qos = QoSConfig()
+mcu = McuConfig()
 
 # Ensure required directories exist
 network.CERT_DIR.mkdir(parents=True, exist_ok=True)

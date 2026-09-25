@@ -125,8 +125,18 @@ class AnomalyFirewall:
             last = self.last_seq_num[client_id]
             diff = (seq - last) & 0xFFFF
             if diff == 0 or diff >= 32768:
-                self._record_anomaly(client_id)
-                return False, f"SEQUENCE_REGRESSION: Received seq {seq}, expected forward from {last}"
+                # If sequence resets back to near-zero (client refreshed or re-authenticated), allow auto-resync
+                if seq < 100 and last > 100:
+                    self.last_seq_num[client_id] = seq
+                    self.anomaly_count[client_id] = 0
+                elif self.anomaly_count.get(client_id, 0) >= 5:
+                    # After 5 consecutive anomalies, force resync so the user is never locked out
+                    self.last_seq_num[client_id] = seq
+                    self.anomaly_count[client_id] = 0
+                else:
+                    self._record_anomaly(client_id)
+                    return False, f"SEQUENCE_REGRESSION: Received seq {seq}, expected forward from {last}"
+
 
         # Neutral / zero-reset packets always bypass timing guards for player safety
         if not is_neutral:

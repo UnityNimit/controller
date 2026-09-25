@@ -7,9 +7,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#08090b">
+  <meta name="screen-orientation" content="landscape">
+  <meta name="x5-orientation" content="landscape">
+  <meta name="x5-page-mode" content="app">
+  <meta name="browsermode" content="application">
+  <link rel="manifest" href="manifest.json">
   <title>Controller</title>
   <link rel="icon" type="image/png" href="logo.png">
-  <link rel="stylesheet" href="css/cockpit.css">
+  <link rel="stylesheet" href="css/cockpit.css?v=2.5.0">
 </head>
 <body>
   <!-- Hidden Native iOS 17.4+ Haptic Switch -->
@@ -20,10 +25,10 @@
   <!-- =======================================================================
        1. STARTING SCREEN: Pure Pitch Black with Logo.png in Absolute Center
        ======================================================================= -->
-  <div class="splash-screen" id="splash-screen" title="Rotate device or tap to start">
+  <div class="splash-screen" id="splash-screen">
     <div class="splash-logo-container" id="splash-btn">
-      <img src="logo.png" alt="Controller" class="splash-logo-img">
-      <div class="splash-rotate-hint" id="splash-rotate-hint">Rotate to start</div>
+      <img src="logo.png" alt="Controller" class="splash-logo-img" draggable="false">
+      <div class="splash-rotate-hint" id="splash-rotate-hint" style="display:none !important;">Rotate to start</div>
     </div>
   </div>
 
@@ -43,11 +48,11 @@
       </button>
 
       <div class="center-logo-wrap mod-settings-nut">
-        <svg class="logo-hold-ring" id="logo-hold-ring" viewBox="0 0 64 64">
+        <svg class="logo-hold-ring" id="logo-hold-ring" viewBox="0 0 64 64" style="pointer-events:none;">
           <circle class="logo-hold-circle" id="logo-hold-circle" cx="32" cy="32" r="28" />
         </svg>
-        <button class="nut-btn borderless-logo-btn" id="btn-settings-logo" title="Controller (Hold to Customize Layout)">
-          <img src="logo.png" alt="Controller" class="center-logo-img">
+        <button class="nut-btn borderless-logo-btn" id="btn-settings-logo" title="Settings" type="button">
+          <img src="logo.png" alt="Controller" class="center-logo-img" draggable="false">
         </button>
       </div>
 
@@ -64,14 +69,24 @@
         <span class="btn-text">Back</span>
       </button>
 
-      <div class="circle-gyro mod-gyro active" id="mod-gyro" data-custom-id="mod-gyro" title="Toggle Gyroscope Steering"><div class="l1-resize-handle" data-target="mod-gyro"></div>
+      <div class="circle-gyro mod-gyro" id="mod-gyro" data-custom-id="mod-gyro" title="Toggle Gyroscope Steering"><div class="l1-resize-handle" data-target="mod-gyro"></div>
         <canvas id="gyro-canvas" class="gyro-canvas" style="display:none;"></canvas>
-        <div class="gyro-horizon-line" id="gyro-horizon-line"></div>
+        <div class="gyro-horizon-line" id="gyro-horizon-line" style="display:none;"></div>
       </div>
 
       <button class="circle-btn mod-menu" id="btn-start" data-btn="START" data-custom-id="btn-start" title="Start"><div class="l1-resize-handle" data-target="btn-start"></div>
         <span class="btn-text">Start</span>
       </button>
+
+      <!-- FLOATING JOYSTICK ZONES (Customizable Floating Areas) -->
+      <div class="floating-stick-zone" id="left-stick-zone" data-custom-id="left-stick-zone">
+        <div class="floating-zone-label">Left Stick Zone</div>
+        <div class="l1-resize-handle" data-target="left-stick-zone" title="Resize Left Floating Area"></div>
+      </div>
+      <div class="floating-stick-zone" id="right-stick-zone" data-custom-id="right-stick-zone">
+        <div class="floating-zone-label">Right Stick Zone</div>
+        <div class="l1-resize-handle" data-target="right-stick-zone" title="Resize Right Floating Area"></div>
+      </div>
 
       <!-- LEFT WING: Circular Left Stick + Circular D-Pad Cross -->
       <div class="gamepad-module mod-left-wing" id="mod-left-wing">
@@ -145,7 +160,7 @@
       </div>
 
       <!-- =====================================================================
-           LAYOUT 1 CUSTOMIZATION HUD & JOYSTICK RADIUS SLIDER
+           LAYOUT CUSTOMIZATION HUD & JOYSTICK RADIUS SLIDER
            ===================================================================== -->
       <div class="l1-custom-hud" id="l1-custom-hud" style="display:none !important;">
         <div class="l1-custom-badge"><span class="l1-pulse-dot"></span>CUSTOMIZE MODE</div>
@@ -169,94 +184,52 @@
     </div>
 
     <!-- =======================================================================
-         LAYOUT 2: Tactical High-Precision Figma Layout (2048 x 868 Master Canvas)
+         SETTINGS PAGE FRAME (100% Seamless Logo Navigation & Containerless Monochromatic UI)
          ======================================================================= -->
-    <div class="layout-2-wrapper" id="layout2-wrapper">
-      <div class="controller-layout2" id="layout2-frame">
+    <div class="gamepad-frame settings-frame" id="settings-frame" style="display: none;">
+      <!-- Exact Center Logo in identical physical coordinate -->
+      <div class="center-logo-wrap mod-settings-nut">
+        <button class="nut-btn borderless-logo-btn" id="settings-btn-logo" title="Back" type="button">
+          <img src="logo.png" alt="Controller" class="center-logo-img" draggable="false">
+        </button>
+      </div>
 
-        <!-- Background Container Artworks -->
-        <img class="l2-asset lt-lb-containers" src="assets/LT_LB_containers.svg" alt="LT and LB Containers">
-        <img class="l2-asset rt-rb-containers" src="assets/RT_RB_containers.svg" alt="RT and RB Containers">
+      <div class="settings-content">
+        <div class="settings-card">
+          <!-- Text showing current player -->
+          <div class="settings-player-title" id="settings-current-player-text">PLAYER 1</div>
 
-        <!-- LT & LB Buttons -->
-        <div class="l2-btn-zone l2-zone-lt" id="l2-btn-lt" data-trigger="LT" title="Left Trigger">
-          <img class="l2-asset lt-label" src="assets/LT.svg" alt="LT">
-        </div>
-        <div class="l2-btn-zone l2-zone-lb" id="l2-btn-lb" data-btn="LB" title="Left Bumper">
-          <img class="l2-asset lb-label" src="assets/LB.svg" alt="LB">
-        </div>
+          <!-- 4 player buttons -->
+          <div class="settings-slot-pills">
+            <button class="settings-slot-pill active" id="settings-slot-p1" data-slot="1" type="button">P1</button>
+            <button class="settings-slot-pill" id="settings-slot-p2" data-slot="2" type="button">P2</button>
+            <button class="settings-slot-pill" id="settings-slot-p3" data-slot="3" type="button">P3</button>
+            <button class="settings-slot-pill" id="settings-slot-p4" data-slot="4" type="button">P4</button>
+          </div>
 
-        <!-- RT & RB Buttons -->
-        <div class="l2-btn-zone l2-zone-rt" id="l2-btn-rt" data-trigger="RT" title="Right Trigger">
-          <img class="l2-asset rt-label" src="assets/RT.svg" alt="RT">
-        </div>
-        <div class="l2-btn-zone l2-zone-rb" id="l2-btn-rb" data-btn="RB" title="Right Bumper">
-          <img class="l2-asset rb-label" src="assets/RB.svg" alt="RB">
-        </div>
+          <!-- Switch player button -->
+          <button class="settings-action-btn settings-capsule-btn" id="btn-switch-player" type="button">SWITCH PLAYER</button>
 
-        <!-- Back & Start Buttons -->
-        <div class="l2-btn-zone l2-zone-back" id="l2-btn-back" data-btn="BACK" title="Back">
-          <img class="l2-asset back-container" src="assets/back_container.svg" alt="Back Container">
-          <img class="l2-asset back-label" src="assets/BACK.svg" alt="BACK">
-        </div>
-        <div class="l2-btn-zone l2-zone-start" id="l2-btn-start" data-btn="START" title="Start">
-          <img class="l2-asset start-container" src="assets/start_container.svg" alt="Start Container">
-          <img class="l2-asset start-label" src="assets/START.svg" alt="START">
-        </div>
+          <!-- 1 capsule button for vibration -->
+          <button class="settings-toggle-btn settings-capsule-btn" id="btn-toggle-vibration" type="button">VIBRATION: <span class="toggle-text">OFF</span></button>
 
-        <!-- Touchpad / Gyroscope Steering Zone -->
-        <div class="l2-touchpad-zone active" id="l2-touchpad-gyro" title="Toggle Gyroscope Steering">
-          <img class="l2-asset touchpad-body" id="l2-touchpad-body" src="assets/touchpad_body.svg" alt="Touchpad Body">
-          <img class="l2-asset touchpad-divider-line" id="l2-touchpad-divider-line" src="assets/touchpad_divider_line.svg" alt="Touchpad Divider Line">
-        </div>
+          <!-- 1 button for reset controls -->
+          <button class="settings-action-btn settings-capsule-btn" id="btn-settings-reset" type="button">RESET CONTROLS</button>
 
-        <!-- D-Pad Left Vertical Buttons -->
-        <div class="l2-btn-zone l2-zone-dpad-up" id="l2-dpad-up" data-dir="DPAD_UP" title="D-Pad Up">
-          <img class="l2-asset dpad-top" src="assets/Rectangle.svg" alt="D-Pad Top">
+          <!-- Hidden compatibility hook -->
+          <button id="btn-settings-gyro" style="display:none !important;" type="button"><span class="toggle-text">OFF</span></button>
         </div>
-        <div class="l2-btn-zone l2-zone-dpad-left" id="l2-dpad-left" data-dir="DPAD_LEFT" title="D-Pad Left">
-          <img class="l2-asset dpad-mid" src="assets/rectangle_1.svg" alt="D-Pad Left">
-        </div>
-        <div class="l2-btn-zone l2-zone-dpad-down" id="l2-dpad-down" data-dir="DPAD_DOWN" title="D-Pad Down">
-          <img class="l2-asset dpad-bot" src="assets/rectange_2.svg" alt="D-Pad Down">
-        </div>
-
-        <!-- Face Buttons (X, Y, B, A) -->
-        <div class="l2-btn-zone l2-zone-x" id="l2-btn-x" data-btn="X" title="X Button">
-          <img class="l2-asset x-container" src="assets/X_container.svg" alt="X Container">
-          <img class="l2-asset x-label" src="assets/X.svg" alt="X">
-        </div>
-        <div class="l2-btn-zone l2-zone-y" id="l2-btn-y" data-btn="Y" title="Y Button">
-          <img class="l2-asset y-container" src="assets/Y_container.svg" alt="Y Container">
-          <img class="l2-asset y-label" src="assets/Y.svg" alt="Y">
-        </div>
-        <div class="l2-btn-zone l2-zone-b" id="l2-btn-b" data-btn="B" title="B Button">
-          <img class="l2-asset b-container" src="assets/B_container.svg" alt="B Container">
-          <img class="l2-asset b-label" src="assets/B-1.svg" alt="B">
-        </div>
-        <div class="l2-btn-zone l2-zone-a" id="l2-btn-a" data-btn="A" title="A Button">
-          <img class="l2-asset a-container" src="assets/A_container.svg" alt="A Container">
-          <img class="l2-asset a-label" src="assets/A-1.svg" alt="A">
-        </div>
-
-        <!-- Joysticks (Interactive Anchors + Gliding Visual Pucks) -->
-        <div class="l2-stick-anchor l2-left-stick-anchor" id="l2-left-stick-anchor">
-          <img class="l2-asset left-joystick l2-left-stick-puck" id="l2-left-stick-puck" src="assets/Left_joystick.svg" alt="Left Joystick">
-        </div>
-        <div class="l2-stick-anchor l2-right-stick-anchor" id="l2-right-stick-anchor">
-          <img class="l2-asset right-joystick l2-right-stick-puck" id="l2-right-stick-puck" src="assets/Right_joystick.svg" alt="Right Joystick">
-        </div>
-
-        <!-- Center Gamepad Icon -> Click to Switch to Layout 1 -->
-        <div class="l2-center-logo-wrap" id="l2-btn-settings-logo" title="Switch to Layout 1">
-          <img class="l2-asset gamepad-icon" id="gamepad-icon" src="assets/Middle_icon.svg" alt="Gamepad Icon">
-          <img class="l2-asset p1" id="p1" src="assets/P1.svg" alt="Player 1">
-        </div>
-
       </div>
     </div>
   </div>
 
-  <script src="js/cockpit.js"></script>
+  <script src="js/auth.js?v=2.5.0"></script>
+  <script src="js/haptics.js?v=2.5.0"></script>
+  <script src="js/high_rate_ticker.js?v=2.5.0"></script>
+  <script src="js/digitizer.js?v=2.5.0"></script>
+  <script src="js/gyro.js?v=2.5.0"></script>
+  <script src="js/visualizer.js?v=2.5.0"></script>
+  <script src="js/layout_customizer.js?v=2.5.0"></script>
+  <script src="js/cockpit.js?v=2.5.0"></script>
 </body>
 </html>

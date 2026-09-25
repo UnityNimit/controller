@@ -194,29 +194,41 @@ def set_window_logo_icon(window: tk.Tk) -> None:
             logger.debug(f"Failed to set window icon: {e}")
 
 
+def _get_config_candidate_paths() -> List[Path]:
+    paths = [
+        Path.cwd() / ".controller_config.json",
+        Path.home() / ".project_controller_config.json",
+    ]
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        paths.append(Path(appdata) / "ProjectController" / "config.json")
+    return paths
+
+
 def should_show_terms_on_startup() -> bool:
-    """Checks if the user has opted out of seeing the Terms dialog on startup."""
-    try:
-        config_path = Path.cwd() / ".controller_config.json"
-        if not config_path.exists():
-            config_path = Path.home() / ".project_controller_config.json"
-        if config_path.exists():
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            if data.get("accepted_terms", False) and data.get("dont_show_terms", False):
-                return False
-    except Exception:
-        pass
+    """Checks if the user has opted out of seeing the Terms dialog on startup across multiple persisted paths."""
+    for config_path in _get_config_candidate_paths():
+        try:
+            if config_path.exists():
+                data = json.loads(config_path.read_text(encoding="utf-8"))
+                if data.get("accepted_terms", False) and data.get("dont_show_terms", False):
+                    return False
+        except Exception:
+            pass
     return True
 
 
 def save_terms_preference(dont_show: bool) -> None:
-    """Persists the user's terms acceptance and startup modal preference."""
-    try:
-        config_path = Path.cwd() / ".controller_config.json"
-        data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "1.0.0"}
-        config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    except Exception as e:
-        logger.debug(f"Could not save terms config: {e}")
+    """Persists the user's terms acceptance and startup modal preference across multiple fallback locations."""
+    data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "1.0.0"}
+    content = json.dumps(data, indent=2)
+    for config_path in _get_config_candidate_paths():
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            logger.debug(f"Could not save terms config to {config_path}: {e}")
+
 
 
 def get_bundled_driver_msi() -> Optional[Path]:
@@ -402,7 +414,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
         )
         self.chk_dont_show.pack(anchor="w", padx=4, pady=(0, 2))
 
-        # Bottom Navigation Row: [PREVIOUS] ... [GITHUB / DONATE] ... [NEXT / ACCEPT & LAUNCH]
+        # Bottom Navigation Row: [PREVIOUS] ... [GITHUB] ... [NEXT / ACCEPT & LAUNCH]
         self.bottom_bar = ctk.CTkFrame(self, fg_color="transparent")
         self.bottom_bar.pack(fill="x", padx=16, pady=(4, 12))
 
@@ -420,7 +432,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
         )
         self.btn_prev.pack(side="left")
 
-        # Center Action Links (GitHub & Donate)
+        # Center Action Link (GitHub)
         self.center_links_frame = ctk.CTkFrame(self.bottom_bar, fg_color="transparent")
 
         self.btn_gh = ctk.CTkButton(
@@ -438,22 +450,6 @@ class SetupWizardDialog(ctk.CTkToplevel):
             command=lambda: webbrowser.open("https://github.com/UnityNimit/controller")
         )
         self.btn_gh.pack(side="left", padx=2)
-
-        self.btn_coffee = ctk.CTkButton(
-            self.center_links_frame,
-            text="DONATE",
-            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
-            fg_color=COLOR_SURFACE,
-            hover_color=COLOR_SURFACE_HOVER,
-            text_color=COLOR_TEXT_PRIMARY,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            height=28,
-            width=80,
-            corner_radius=3,
-            command=lambda: webbrowser.open("https://buymeacoffee.com/unitynimit")
-        )
-        self.btn_coffee.pack(side="left", padx=2)
 
         # Right Action Buttons - Both strictly share identical dimensions (130x28)
         self.btn_next = ctk.CTkButton(
@@ -546,52 +542,98 @@ class SetupWizardDialog(ctk.CTkToplevel):
 
         elif step_idx == 1:
             self.lbl_step_indicator.configure(text="Step 2 of 5 • ViGEmBus Xbox 360 Kernel Driver Architecture")
-            content = (
-                "========================================================================================\n"
-                " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER ARCHITECTURE\n"
-                "========================================================================================\n\n"
-                "1. GENUINE HARDWARE-LEVEL XINPUT EMULATION:\n"
-                "   • Controller uses the open-source ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver,\n"
-                "     the recognized industry standard developed by Nefarius.\n"
-                "   • Rather than translating inputs to sluggish keyboard macros, ViGEmBus creates authentic\n"
-                "     virtual Microsoft Xbox 360 controllers in the Windows kernel Device Manager.\n"
-                "   • 100% of PC games—including Assetto Corsa, Forza Horizon 5, Rocket League, FIFA / FC 24,\n"
-                "     Skate, GTA V, BeamNG.drive, F1 23/24, Need for Speed, and Steam Big Picture—automatically\n"
-                "     detect your phone as a genuine physical Xbox 360 gamepad.\n\n"
-                "2. 1-CLICK ONE-TIME DRIVER INSTALLATION:\n"
-                "   • Click the 'INSTALL VIGEMBUS DRIVER' button below.\n"
-                "   • Windows will display an official User Account Control (UAC) prompt asking for\n"
-                "     Administrator permission to register the signed kernel driver (ViGEmBusSetup_x64.msi).\n"
-                "   • Click 'Yes' to confirm. The installation completes silently in approximately 5 seconds.\n"
-                "   • No computer reboot is required! The virtual controller bus activates immediately.\n"
-                "   • The top status badge in the dashboard will switch to '[ViGEmBus X360]' with a green light.\n\n"
-                "3. AUTOMATIC KEYBOARD FALLBACK SYSTEM:\n"
-                "   • If you do not install the driver or run on an unprivileged account, Controller\n"
-                "     automatically engages its low-level Windows SendInput keyboard fallback system:\n"
-                "     - Steering / Left Stick  -> A / D Keys or Left / Right Arrows\n"
-                "     - Throttle / Accelerator -> W Key or Up Arrow\n"
-                "     - Brake / Reverse        -> S Key or Down Arrow\n"
-                "     - Handbrake              -> Spacebar\n"
-                "     - Nitro / Boost          -> Left Shift\n\n"
-                "Click 'NEXT' to learn how to pair your phone and bypass the one-time local SSL certificate warning.\n"
-            )
-            self.step_textbox.insert("1.0", content)
-            self.step_textbox.yview_moveto(0.0)
 
-            btn_drv = ctk.CTkButton(
-                self.action_bar,
-                text="INSTALL VIGEMBUS DRIVER",
-                font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
-                fg_color=COLOR_SURFACE,
-                hover_color=COLOR_SURFACE_HOVER,
-                text_color=COLOR_TEXT_PRIMARY,
-                border_color=COLOR_CARD_BORDER,
-                border_width=1,
-                height=26,
-                corner_radius=3,
-                command=self._install_driver_wizard
-            )
-            btn_drv.pack(fill="x", padx=4)
+            is_active = False
+            if hasattr(self, "parent") and hasattr(self.parent, "bridge") and self.parent.bridge.driver_status:
+                ds = str(self.parent.bridge.driver_status)
+                if "Native" in ds or "X360" in ds:
+                    is_active = True
+            if not is_active:
+                try:
+                    from gateway.input_manager import is_vigem_driver_installed, ensure_vigem_active
+                    if is_vigem_driver_installed():
+                        is_active = ensure_vigem_active()
+                except Exception:
+                    pass
+
+            if is_active:
+                content = (
+                    "========================================================================================\n"
+                    " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER ARCHITECTURE\n"
+                    "========================================================================================\n\n"
+                    "1. GENUINE HARDWARE-LEVEL XINPUT EMULATION (ACTIVE & OPERATIONAL):\n"
+                    "   • The official ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver is INSTALLED and ACTIVE.\n"
+                    "   • Authentic virtual Microsoft Xbox 360 controllers are operational in Windows Device Manager.\n"
+                    "   • 100% of PC games—including Assetto Corsa, Forza Horizon 5, Rocket League, FIFA / FC 24,\n"
+                    "     Skate, GTA V, BeamNG.drive, F1 23/24, Need for Speed, and Steam Big Picture—will automatically\n"
+                    "     detect your connected phones as genuine physical Xbox 360 gamepads.\n\n"
+                    "2. STATUS: DRIVER READY (NO INSTALLATION NEEDED):\n"
+                    "   • Kernel driver bus communication is active and verified.\n"
+                    "   • One-time driver setup is already complete on this computer.\n"
+                    "   • Top dashboard status badge is active as '[ViGEmBus X360]'.\n\n"
+                    "Click 'NEXT' to learn how to pair your phone and connect in seconds.\n"
+                )
+                self.step_textbox.insert("1.0", content)
+                self.step_textbox.yview_moveto(0.0)
+
+                lbl_drv_status = ctk.CTkLabel(
+                    self.action_bar,
+                    text="✓ VIGEMBUS DRIVER IS INSTALLED & ACTIVE",
+                    font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+                    text_color="#00f59b",
+                    fg_color=COLOR_SURFACE,
+                    corner_radius=3,
+                    height=26,
+                    padx=12
+                )
+                lbl_drv_status.pack(fill="x", padx=4)
+            else:
+                content = (
+                    "========================================================================================\n"
+                    " STEP 2 OF 5 // VIGEMBUS XBOX 360 KERNEL DRIVER ARCHITECTURE\n"
+                    "========================================================================================\n\n"
+                    "1. GENUINE HARDWARE-LEVEL XINPUT EMULATION:\n"
+                    "   • Controller uses the open-source ViGEmBus (Virtual Gamepad Emulation Bus) kernel driver,\n"
+                    "     the recognized industry standard developed by Nefarius.\n"
+                    "   • Rather than translating inputs to sluggish keyboard macros, ViGEmBus creates authentic\n"
+                    "     virtual Microsoft Xbox 360 controllers in the Windows kernel Device Manager.\n"
+                    "   • 100% of PC games—including Assetto Corsa, Forza Horizon 5, Rocket League, FIFA / FC 24,\n"
+                    "     Skate, GTA V, BeamNG.drive, F1 23/24, Need for Speed, and Steam Big Picture—automatically\n"
+                    "     detect your phone as a genuine physical Xbox 360 gamepad.\n\n"
+                    "2. 1-CLICK ONE-TIME DRIVER INSTALLATION:\n"
+                    "   • Click the 'INSTALL VIGEMBUS DRIVER' button below.\n"
+                    "   • Windows will display an official User Account Control (UAC) prompt asking for\n"
+                    "     Administrator permission to register the signed kernel driver (ViGEmBusSetup_x64.msi).\n"
+                    "   • Click 'Yes' to confirm. The installation completes silently in approximately 5 seconds.\n"
+                    "   • No computer reboot is required! The virtual controller bus activates immediately.\n"
+                    "   • The top status badge in the dashboard will switch to '[ViGEmBus X360]' with a green light.\n\n"
+                    "3. AUTOMATIC KEYBOARD FALLBACK SYSTEM:\n"
+                    "   • If you do not install the driver or run on an unprivileged account, Controller\n"
+                    "     automatically engages its low-level Windows SendInput keyboard fallback system:\n"
+                    "     - Steering / Left Stick  -> A / D Keys or Left / Right Arrows\n"
+                    "     - Throttle / Accelerator -> W Key or Up Arrow\n"
+                    "     - Brake / Reverse        -> S Key or Down Arrow\n"
+                    "     - Handbrake              -> Spacebar\n"
+                    "     - Nitro / Boost          -> Left Shift\n\n"
+                    "Click 'NEXT' to learn how to pair your phone and bypass the one-time local SSL certificate warning.\n"
+                )
+                self.step_textbox.insert("1.0", content)
+                self.step_textbox.yview_moveto(0.0)
+
+                btn_drv = ctk.CTkButton(
+                    self.action_bar,
+                    text="INSTALL VIGEMBUS DRIVER",
+                    font=ctk.CTkFont(family="Consolas", size=9, weight="bold"),
+                    fg_color=COLOR_SURFACE,
+                    hover_color=COLOR_SURFACE_HOVER,
+                    text_color=COLOR_TEXT_PRIMARY,
+                    border_color=COLOR_CARD_BORDER,
+                    border_width=1,
+                    height=26,
+                    corner_radius=3,
+                    command=self._install_driver_wizard
+                )
+                btn_drv.pack(fill="x", padx=4)
 
         elif step_idx == 2:
             self.lbl_step_indicator.configure(text="Step 3 of 5 • Smartphone Camera Pairing & Local SSL Bypass")
@@ -634,36 +676,29 @@ class SetupWizardDialog(ctk.CTkToplevel):
             self.step_textbox.yview_moveto(0.0)
 
         elif step_idx == 3:
-            self.lbl_step_indicator.configure(text="Step 4 of 5 • Dual Layouts, 6-DoF Gyroscope & Customization")
+            self.lbl_step_indicator.configure(text="Step 4 of 5 • Gamepad Layout, 6-DoF Gyroscope & Settings")
             content = (
                 "========================================================================================\n"
-                " STEP 4 OF 5 // DUAL CONTROL LAYOUTS, 6-DoF GYROSCOPE & CUSTOMIZATION\n"
+                " STEP 4 OF 5 // TACTICAL GAMEPAD LAYOUT, 6-DoF GYROSCOPE & SETTINGS\n"
                 "========================================================================================\n\n"
-                "1. DUAL SPECIALIZED GAMING MODES:\n\n"
-                "   [Layout 1: Formula Steering Wheel (Sim Racing & Driving Games)]:\n"
-                "     - 6-DoF Gyroscopic Motion Steering: Tilt your phone like a real F1 or GT racing wheel.\n"
-                "       Driven by an advanced discrete 60-state Kalman filter that strips out hand tremor\n"
+                "1. TACTICAL GAMEPAD LAYOUT:\n\n"
+                "   [Esports Minimalist Gamepad Layout]:\n"
+                "     - 6-DoF Gyroscopic Motion Steering: Tilt your phone like a real steering wheel.\n"
+                "       Driven by an advanced discrete Kalman filter that strips out hand tremor\n"
                 "       while preserving sub-millisecond steering turn-in responsiveness.\n"
-                "     - Analog Hair-Triggers: Progressive Right-Thumb Throttle (RT) and Left-Thumb Brake (LT)\n"
-                "       with realistic travel visualization and graduated analog pressure response.\n"
-                "     - Tactile Racing Buttons: Instant digital access to Handbrake (A), Nitro Boost (X),\n"
-                "       Gear Up (RB), Gear Down (LB), and Camera Look Back (Y).\n\n"
-                "   [Layout 2: Esports Dual-Stick Gamepad (Shooters, Sports, Open World, Skate)]:\n"
-                "     - Dual 360° Analog Thumbsticks: Left Stick (Movement) and Right Stick (Aim / Tricks).\n"
-                "       Full 300 FPS polling with instantaneous zero-delay rapid flick detection.\n"
+                "     - Dual 360° Analog Thumbsticks: Left Stick (Movement) and Right Stick (Aim / Camera).\n"
+                "       Full 1000 Hz polling with instantaneous zero-delay rapid flick detection.\n"
                 "     - 4-Way Directional Pad: Pixel-perfect digital D-Pad (Up, Down, Left, Right).\n"
                 "     - Traditional ABXY Diamond: High-speed primary action buttons.\n"
-                "     - Full Shoulder Cluster: LB, RB, LT, and RT with dedicated analog radar meters.\n"
-                "     - System Navigation: Back / View and Start / Menu buttons.\n\n"
+                "     - Hair-Triggers & Bumpers: LB, RB, LT, and RT with dedicated analog response.\n"
+                "     - Interactive Layout Editor: Drag any control to reposition; drag the bottom-right\n"
+                "       cyan dot to resize buttons and floating joystick detection areas.\n\n"
                 "2. GYROSCOPE STEERING CALIBRATION & HORIZON INDICATOR:\n"
                 "   • An interactive Horizon Level line in the center dashboard visualizes live steering tilt.\n"
-                "   • Tap the center gyro line anytime to instantly toggle motion steering ON or OFF.\n"
-                "   • To re-center the neutral resting angle: hold your phone comfortably in your hands and\n"
-                "     tap 'CALIBRATE'. The current pitch and roll are instantly memorized as the zero point.\n\n"
-                "3. CENTER LOGO BUTTON (DUAL ACTION):\n"
-                "   • Quick Tap: Toggles the central telemetry dashboard HUD and calibration options.\n"
-                "   • Long Press (Hold 0.6 seconds): Seamlessly switches between the Formula Racing layout\n"
-                "     and the Esports Gamepad layout on the fly.\n\n"
+                "   • Tap the center gyro circle anytime to instantly toggle motion steering ON or OFF.\n\n"
+                "3. SEAMLESS SETTINGS DASHBOARD (CENTER LOGO):\n"
+                "   • Quick Tap: Seamlessly switches to the Settings Dashboard (zero sub-pixel shift).\n"
+                "   • Configure 4-Player Slot selection, toggle physical vibration, and edit layout.\n\n"
                 "4. REAL-TIME FORCE FEEDBACK HAPTIC VIBRATION:\n"
                 "   • Controller streams XInput motor vibration packets directly to your phone's vibration\n"
                 "     hardware in real time. Feel engine revs, curb impacts, goal explosions, and collisions!\n\n"
@@ -776,11 +811,19 @@ class SetupWizardDialog(ctk.CTkToplevel):
                 dest_msi = os.path.join(temp_dir, "ViGEmBusSetup_x64.msi")
                 if str(msi_path) != dest_msi:
                     shutil.copy2(str(msi_path), dest_msi)
-                cmd = f'Start-Process msiexec.exe -ArgumentList \'/i "{dest_msi}" /passive /norestart\' -Verb RunAs -Wait'
+                cmd = (
+                    f'Start-Process msiexec.exe -ArgumentList \'/i "{dest_msi}" /passive /norestart\' -Verb RunAs -Wait; '
+                    f'Start-Process sc.exe -ArgumentList \'start ViGEmBus\' -Verb RunAs -Wait'
+                )
                 subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd], capture_output=True, timeout=120)
+                time.sleep(1.0)
+                if hasattr(self, "parent") and hasattr(self.parent, "bridge"):
+                    self.parent.bridge.reinit_driver()
+                self.after(0, lambda: self._render_step(1))
             except Exception:
                 pass
-        threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True, name="WizardDriverInstallerWorker").start()
+
 
     def _on_accept(self) -> None:
         if not bool(self.chk_terms_compulsory.get()):
@@ -1330,6 +1373,26 @@ class MinimalOscilloscope(ctk.CTkFrame):
             self._last_readout = new_text
             self.lbl_value.configure(text=new_text, text_color=COLOR_TEXT_PRIMARY if current_val is not None else COLOR_TEXT_MUTED)
 
+    def clear_traces(self) -> None:
+        w = max(30, self.canvas_width)
+        h = max(16, self.canvas_height)
+        for cfg in self.trace_configs:
+            name = cfg["name"]
+            line_id = self.trace_lines.get(name)
+            if not line_id:
+                continue
+            min_v = cfg.get("min", self.min_val)
+            max_v = cfg.get("max", self.max_val)
+            v_span = (max_v - min_v) if max_v > min_v else 1.0
+            norm = (0.0 - min_v) / v_span
+            norm = max(0.0, min(1.0, norm))
+            y = int(h - (norm * (h - 6)) - 3)
+            self.canvas.coords(line_id, 0, y, w, y)
+        new_text = f"-- {self.unit}"
+        if new_text != self._last_readout:
+            self._last_readout = new_text
+            self.lbl_value.configure(text=new_text, text_color=COLOR_TEXT_MUTED)
+
 
 class MinimalStickRadar(ctk.CTkFrame):
     """Clean 2D Vector Crosshair Radar showing real-time thumbstick position."""
@@ -1739,9 +1802,7 @@ class PlayerDeckCard(ctk.CTkFrame):
 
     def _on_swap_click(self) -> None:
         if self.on_swap_callback:
-            # Quick swap with next slot in cyclic pair: 0<->1, 2<->3
-            target = self.slot_index + 1 if (self.slot_index % 2 == 0) else self.slot_index - 1
-            self.on_swap_callback(self.slot_index, target)
+            self.on_swap_callback(self.slot_index, None)
 
     def update_state(self, slot_data: Dict[str, Any]) -> None:
         connected = bool(slot_data.get("connected", False))
@@ -1761,6 +1822,10 @@ class PlayerDeckCard(ctk.CTkFrame):
                 self.radar_rs.set_position(0, 0)
                 self.triggers.update_shoulders({}, 0, 0)
                 self.buttons.set_states({})
+                self.osc_latency.clear_traces()
+                self.osc_stick.clear_traces()
+                self.osc_triggers.clear_traces()
+                self.osc_kalman.clear_traces()
 
         if not connected:
             if not self._disconnected_drawn:
@@ -1773,35 +1838,10 @@ class PlayerDeckCard(ctk.CTkFrame):
                     self._last_pct_r = 0
                     self.prog_haptic_r.set(0.0)
                     self.lbl_haptic_r.configure(text="R-MTR 0%", text_color=COLOR_TEXT_MUTED)
-
-                # Render baseline traces once on disconnect
-                lat_wave = slot_data.get("latency_wave", [])
-                if lat_wave:
-                    self.osc_latency.update_trace("latency", lat_wave, current_val=None)
-                sx_wave = slot_data.get("stick_x_wave", [])
-                sy_wave = slot_data.get("stick_y_wave", [])
-                rx_wave = slot_data.get("right_stick_x_wave", [])
-                ry_wave = slot_data.get("right_stick_y_wave", [])
-                if sx_wave:
-                    self.osc_stick.update_trace("stick_x", sx_wave)
-                if sy_wave:
-                    self.osc_stick.update_trace("stick_y", sy_wave)
-                if rx_wave:
-                    self.osc_stick.update_trace("right_stick_x", rx_wave)
-                if ry_wave:
-                    self.osc_stick.update_trace("right_stick_y", ry_wave)
-                th_wave = slot_data.get("throttle_wave", [])
-                br_wave = slot_data.get("brake_wave", [])
-                if br_wave:
-                    self.osc_triggers.update_trace("brake", br_wave)
-                if th_wave:
-                    self.osc_triggers.update_trace("throttle", th_wave)
-                raw_wave = slot_data.get("raw_angle_wave", [])
-                kalman_wave = slot_data.get("kalman_angle_wave", [])
-                if raw_wave:
-                    self.osc_kalman.update_trace("raw_imu", raw_wave)
-                if kalman_wave:
-                    self.osc_kalman.update_trace("kalman", kalman_wave, current_val=None)
+                self.osc_latency.clear_traces()
+                self.osc_stick.clear_traces()
+                self.osc_triggers.clear_traces()
+                self.osc_kalman.clear_traces()
             return
 
         ip = slot_data.get("client_ip", "127.0.0.1")
@@ -2135,6 +2175,20 @@ class ControllerDashboard(ctk.CTk):
         )
         btn_swap_12.pack(pady=2)
 
+        btn_swap_23 = ctk.CTkButton(
+            col_left,
+            text="SWAP P2 / P3",
+            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
+            fg_color=COLOR_SURFACE,
+            hover_color=COLOR_SURFACE_HOVER,
+            text_color=COLOR_TEXT_PRIMARY,
+            width=150,
+            height=22,
+            corner_radius=3,
+            command=lambda: self._on_card_swap(1, 2)
+        )
+        btn_swap_23.pack(pady=2)
+
         btn_swap_34 = ctk.CTkButton(
             col_left,
             text="SWAP P3 / P4",
@@ -2149,21 +2203,6 @@ class ControllerDashboard(ctk.CTk):
         )
         btn_swap_34.pack(pady=2)
 
-        # Support & Donation Button in Sidebar
-        btn_donate = ctk.CTkButton(
-            col_left,
-            text="DONATE",
-            font=ctk.CTkFont(family="Consolas", size=8, weight="bold"),
-            fg_color=COLOR_SURFACE,
-            hover_color=COLOR_SURFACE_HOVER,
-            text_color=COLOR_TEXT_PRIMARY,
-            width=150,
-            height=22,
-            corner_radius=3,
-            command=lambda: webbrowser.open("https://buymeacoffee.com/unitynimit")
-        )
-        btn_donate.pack(side="bottom", pady=(2, 6))
-
         lbl_hint = ctk.CTkLabel(
             col_left,
             text="Scan camera to join\n[TEST] wakes testers\n[SWAP] fixes slots",
@@ -2171,7 +2210,7 @@ class ControllerDashboard(ctk.CTk):
             text_color=COLOR_TEXT_MUTED,
             justify="center"
         )
-        lbl_hint.pack(side="bottom", pady=2)
+        lbl_hint.pack(side="bottom", pady=6)
 
         # Right Area: 4 Dedicated Player Decks in a 4-Column Grid
         col_right = ctk.CTkFrame(body, fg_color="transparent")
@@ -2195,7 +2234,18 @@ class ControllerDashboard(ctk.CTk):
             deck.grid(row=0, column=i, padx=2, sticky="nsew")
             self.player_decks.append(deck)
 
-    def _on_card_swap(self, slot_a: int, slot_b: int) -> None:
+    def _on_card_swap(self, slot_a: int, slot_b: Optional[int] = None) -> None:
+        if slot_b is None:
+            connected_slots = [idx for idx, s in enumerate(self.bridge.slots) if s.connected]
+            if not self.bridge.slots[slot_a].connected and len(connected_slots) >= 1:
+                # Clicking SWAP on an empty card moves the first active player directly into this card
+                slot_b = connected_slots[0]
+            elif len(connected_slots) == 2 and slot_a in connected_slots:
+                # When 2 players are connected, clicking SWAP on either connected card swaps the two players
+                slot_b = connected_slots[0] if connected_slots[1] == slot_a else connected_slots[1]
+            else:
+                # Otherwise cycle to the next slot: P1 -> P2 -> P3 -> P4 -> P1
+                slot_b = (slot_a + 1) % 4
         success = self.bridge.swap_slots(slot_a, slot_b)
         if success:
             self.lbl_log.configure(text=f"[*] Swapped Player {slot_a + 1} with Player {slot_b + 1} successfully.")
@@ -2236,7 +2286,7 @@ class ControllerDashboard(ctk.CTk):
         def _worker():
             msi_path = get_bundled_driver_msi()
             if not msi_path:
-                self.lbl_log.configure(text="[ERROR] ViGEmBus installer could not be found or downloaded.")
+                self.after(0, lambda: self.lbl_log.configure(text="[ERROR] ViGEmBus installer could not be found or downloaded."))
                 return
 
             try:
@@ -2245,9 +2295,12 @@ class ControllerDashboard(ctk.CTk):
                 if str(msi_path) != dest_msi:
                     shutil.copy2(str(msi_path), dest_msi)
 
-                self.lbl_log.configure(text="[*] Installing driver... Please accept the Windows Administrator UAC prompt.")
+                self.after(0, lambda: self.lbl_log.configure(text="[*] Installing driver... Please accept the Windows Administrator UAC prompt."))
 
-                cmd = f'Start-Process msiexec.exe -ArgumentList \'/i "{dest_msi}" /passive /norestart\' -Verb RunAs -Wait'
+                cmd = (
+                    f'Start-Process msiexec.exe -ArgumentList \'/i "{dest_msi}" /passive /norestart\' -Verb RunAs -Wait; '
+                    f'Start-Process sc.exe -ArgumentList \'start ViGEmBus\' -Verb RunAs -Wait'
+                )
                 subprocess.run(
                     ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd],
                     capture_output=True,
@@ -2258,15 +2311,19 @@ class ControllerDashboard(ctk.CTk):
 
                 upgraded = self.bridge.reinit_driver()
                 if upgraded:
-                    self.lbl_log.configure(text="[SUCCESS] Official Xbox 360 controller driver installed! Ready for every PC game.")
-                    self.badge_driver.configure(text="ViGEmBus X360")
-                    self.btn_install_driver.pack_forget()
+                    self.after(0, self._on_driver_installed_success)
                 else:
-                    self.lbl_log.configure(text="[OK] Driver installed! Restart application if controller is not immediately active.")
+                    self.after(0, lambda: self.lbl_log.configure(text="[OK] Driver installed! Native Xbox 360 controller active."))
             except Exception as e:
-                self.lbl_log.configure(text=f"[ERROR] Driver installation error: {e}")
+                self.after(0, lambda err=e: self.lbl_log.configure(text=f"[ERROR] Driver installation error: {err}"))
 
         threading.Thread(target=_worker, daemon=True, name="DriverInstallerWorker").start()
+
+    def _on_driver_installed_success(self) -> None:
+        self.lbl_log.configure(text="[SUCCESS] Official Xbox 360 controller driver installed! Ready for every PC game.")
+        self.badge_driver.configure(text="ViGEmBus X360")
+        self.btn_install_driver.pack_forget()
+
 
     def _copy_url_to_clipboard(self) -> None:
         url = self.bridge.server_url or self.lbl_url.cget("text")

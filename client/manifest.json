@@ -1,0 +1,17 @@
+{
+  "name": "Controller",
+  "short_name": "Controller",
+  "description": "Tactical Low-Latency Gamepad Controller",
+  "start_url": "index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#08090b",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}
