@@ -149,9 +149,20 @@ class GamepadClient {
       DPAD_RIGHT: false
     };
 
-    // Diagnostics
+    // Diagnostics & Adaptive Anti-Bufferbloat State
     this.rtt = 0;
+    this._rttSamples = [];
     this._lastSendTime = 0;
+    this._lastRxTime = 0;
+    this._lastSentMask = 0;
+    this._lastSentStickX = 0;
+    this._lastSentStickY = 0;
+    this._lastSentRX = 0;
+    this._lastSentRY = 0;
+    this._lastSentThrottle = 0;
+    this._lastSentBrake = 0;
+    this._lastSentAngle = 0;
+    this._lastSentGyro = false;
     this.layout1Scale = 1.0;
     this._lastLogoActionTime = 0;
     this._settingsLogoPressed = false;
@@ -170,6 +181,19 @@ class GamepadClient {
     this._initDom();
     this._initControls();
     this._initCanvases();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", () => {
+        if (!this.connected) this.connect();
+      });
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && !this.connected) {
+          this.connect();
+        }
+      });
+    }
   }
 
   // Subsystem Delegation Getters & Setters
@@ -1024,10 +1048,12 @@ class GamepadClient {
     this.ws.onopen = () => {
       this.connected = false;
       this.authenticated = false;
+      this._lastRxTime = performance.now();
     };
 
     this.ws.onmessage = async (evt) => {
       try {
+        this._lastRxTime = performance.now();
         let msg = null;
         if (typeof evt.data === "string") {
           msg = JSON.parse(evt.data);
@@ -1044,11 +1070,15 @@ class GamepadClient {
         } else if (msg.type === "AUTH_SUCCESS") {
           this.connected = true;
           this.authenticated = true;
+          this._rttSamples = [];
           this.playerSlot = msg.player_slot;
           localStorage.setItem("controller_preferred_slot", String(this.playerSlot));
           this.syncSettingsDom();
           this._updatePingDisplay(1);
           this.sendInputNow(true);
+          try {
+            this.ws.send(JSON.stringify({ type: "PING", ts: performance.now() }));
+          } catch (_) {}
         } else if (msg.type === "SLOT_REASSIGNED") {
           this.playerSlot = msg.player_slot;
           localStorage.setItem("controller_preferred_slot", String(this.playerSlot));
@@ -1058,7 +1088,15 @@ class GamepadClient {
         } else if (msg.type === "RUMBLE") {
           this.haptics.handleRumble(msg.large, msg.small);
         } else if (msg.type === "PONG") {
-          this.rtt = Math.max(1, Math.round(performance.now() - msg.ts));
+          const rawRtt = Math.max(1, Math.round(performance.now() - msg.ts));
+          if (!this._rttSamples) this._rttSamples = [];
+          this._rttSamples.push(rawRtt);
+          if (this._rttSamples.length > 3) {
+            this._rttSamples.shift();
+          }
+          const sorted = this._rttSamples.slice().sort((a, b) => a - b);
+          const medianRtt = sorted[Math.floor(sorted.length / 2)];
+          this.rtt = this.rtt > 0 ? Math.max(1, Math.round(this.rtt * 0.65 + medianRtt * 0.35)) : medianRtt;
           this._updatePingDisplay(this.rtt);
         }
       } catch (_) {}
@@ -1073,7 +1111,7 @@ class GamepadClient {
         this._reconnectTimer = setTimeout(() => {
           this._reconnectTimer = null;
           this.connect();
-        }, 1500);
+        }, 250);
       }
     };
 
@@ -1084,10 +1122,63 @@ class GamepadClient {
     };
   }
 
+  _computeButtonMask() {
+    let btnMask = 0;
+    if (this.buttons.A) btnMask |= (1 << 0);
+    if (this.buttons.B) btnMask |= (1 << 1);
+    if (this.buttons.X) btnMask |= (1 << 2);
+    if (this.buttons.Y) btnMask |= (1 << 3);
+    if (this.buttons.LB) btnMask |= (1 << 4);
+    if (this.buttons.RB) btnMask |= (1 << 5);
+    if (this.brake > 0.05) btnMask |= (1 << 6);
+    if (this.throttle > 0.05) btnMask |= (1 << 7);
+    if (this.buttons.START) btnMask |= (1 << 8);
+    if (this.buttons.BACK) btnMask |= (1 << 9);
+    if (this.buttons.LS) btnMask |= (1 << 10);
+    if (this.buttons.RS) btnMask |= (1 << 11);
+    if (this.buttons.DPAD_UP) btnMask |= (1 << 12);
+    if (this.buttons.DPAD_DOWN) btnMask |= (1 << 13);
+    if (this.buttons.DPAD_LEFT) btnMask |= (1 << 14);
+    if (this.buttons.DPAD_RIGHT) btnMask |= (1 << 15);
+    return btnMask;
+  }
+
+  _isInputActiveOrChanged() {
+    const btnMask = this._computeButtonMask();
+    if (
+      this.leftStickActive ||
+      this.rightStickActive ||
+      this.gyroEnabled ||
+      btnMask !== 0 ||
+      this.throttle > 0.005 ||
+      this.brake > 0.005 ||
+      Math.abs(this.stickX) > 50 ||
+      Math.abs(this.stickY) > 50 ||
+      Math.abs(this.rightStickX) > 50 ||
+      Math.abs(this.rightStickY) > 50
+    ) {
+      return true;
+    }
+    if (
+      btnMask !== this._lastSentMask ||
+      Math.round(this.stickX) !== this._lastSentStickX ||
+      Math.round(this.stickY) !== this._lastSentStickY ||
+      Math.round(this.rightStickX) !== this._lastSentRX ||
+      Math.round(this.rightStickY) !== this._lastSentRY ||
+      Math.round(this.throttle * 255) !== this._lastSentThrottle ||
+      Math.round(this.brake * 255) !== this._lastSentBrake ||
+      this.gyroEnabled !== this._lastSentGyro
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   sendInputNow(isCritical = false) {
     if (this.isCustomizingLayout1) return;
     if (!this.authenticated || !this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    if (!isCritical && this.ws.bufferedAmount > 8192) return;
+    // Strict 256-byte anti-bufferbloat cap for non-critical frames prevents Wi-Fi TX queue buildup
+    if (!isCritical && this.ws.bufferedAmount > 256) return;
 
     const now = performance.now();
     this._lastSendTime = now;
@@ -1097,6 +1188,17 @@ class GamepadClient {
     const effectiveGyro = this.gyroEnabled && !manualStickActive;
     const effectiveAngle = effectiveGyro ? (this.rawAngle - this.zeroOffset) : 0.0;
     const effectiveStickX = effectiveGyro ? 0 : this.stickX;
+    const btnMask = this._computeButtonMask();
+
+    this._lastSentMask = btnMask;
+    this._lastSentStickX = Math.round(effectiveStickX);
+    this._lastSentStickY = Math.round(this.stickY);
+    this._lastSentRX = Math.round(this.rightStickX);
+    this._lastSentRY = Math.round(this.rightStickY);
+    this._lastSentThrottle = Math.round(this.throttle * 255);
+    this._lastSentBrake = Math.round(this.brake * 255);
+    this._lastSentAngle = Math.round(effectiveAngle * 100);
+    this._lastSentGyro = effectiveGyro;
 
     if (this.useBinaryProtocol) {
       const v = this._binView;
@@ -1108,34 +1210,17 @@ class GamepadClient {
       // 4-7: timestamp uint32 ms
       v.setUint32(4, Math.round(now) >>> 0, true);
       // 8-15: axes (stickX, stickY, rightStickX, rightStickY)
-      v.setInt16(8, Math.max(-32768, Math.min(32767, Math.round(effectiveStickX))), true);
-      v.setInt16(10, Math.max(-32768, Math.min(32767, Math.round(this.stickY))), true);
-      v.setInt16(12, Math.max(-32768, Math.min(32767, Math.round(this.rightStickX))), true);
-      v.setInt16(14, Math.max(-32768, Math.min(32767, Math.round(this.rightStickY))), true);
+      v.setInt16(8, Math.max(-32768, Math.min(32767, this._lastSentStickX)), true);
+      v.setInt16(10, Math.max(-32768, Math.min(32767, this._lastSentStickY)), true);
+      v.setInt16(12, Math.max(-32768, Math.min(32767, this._lastSentRX)), true);
+      v.setInt16(14, Math.max(-32768, Math.min(32767, this._lastSentRY)), true);
       // 16-17: throttle, brake uint8
-      v.setUint8(16, Math.max(0, Math.min(255, Math.round(this.throttle * 255))));
-      v.setUint8(17, Math.max(0, Math.min(255, Math.round(this.brake * 255))));
+      v.setUint8(16, Math.max(0, Math.min(255, this._lastSentThrottle)));
+      v.setUint8(17, Math.max(0, Math.min(255, this._lastSentBrake)));
       // 18-19: button bitmask uint16
-      let btnMask = 0;
-      if (this.buttons.A) btnMask |= (1 << 0);
-      if (this.buttons.B) btnMask |= (1 << 1);
-      if (this.buttons.X) btnMask |= (1 << 2);
-      if (this.buttons.Y) btnMask |= (1 << 3);
-      if (this.buttons.LB) btnMask |= (1 << 4);
-      if (this.buttons.RB) btnMask |= (1 << 5);
-      if (this.brake > 0.05) btnMask |= (1 << 6);
-      if (this.throttle > 0.05) btnMask |= (1 << 7);
-      if (this.buttons.START) btnMask |= (1 << 8);
-      if (this.buttons.BACK) btnMask |= (1 << 9);
-      if (this.buttons.LS) btnMask |= (1 << 10);
-      if (this.buttons.RS) btnMask |= (1 << 11);
-      if (this.buttons.DPAD_UP) btnMask |= (1 << 12);
-      if (this.buttons.DPAD_DOWN) btnMask |= (1 << 13);
-      if (this.buttons.DPAD_LEFT) btnMask |= (1 << 14);
-      if (this.buttons.DPAD_RIGHT) btnMask |= (1 << 15);
       v.setUint16(18, btnMask, true);
       // 20-21: gyro angle x 100 int16
-      const angleX100 = Math.max(-32768, Math.min(32767, Math.round(effectiveAngle * 100)));
+      const angleX100 = Math.max(-32768, Math.min(32767, this._lastSentAngle));
       v.setInt16(20, angleX100, true);
       // 22: flags (bit 0: gyro_enabled)
       let flags = 0;
@@ -1175,59 +1260,53 @@ class GamepadClient {
   _startLoop() {
     let lastPing = 0;
 
-    // Dedicated continuous high-frequency unthrottled transmission pump (Pillar 3)
-    // Streams uninterrupted controller frames whether neutral or active, exactly like a real physical controller!
+    // Adaptive high-frequency transmission pump:
+    // Streams at high rate (>= 2.5ms) during active control changes/holds,
+    // and throttles redundant neutral keepalive packets to 25ms (40 Hz) to eliminate Wi-Fi airtime saturation.
+    const pumpTick = () => {
+      if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const now = performance.now();
+        const elapsed = now - this._lastSendTime;
+        const active = this._isInputActiveOrChanged();
+        const minInterval = active ? 2.5 : 25.0;
+        if (elapsed >= minInterval) {
+          this.sendInputNow(false);
+        }
+      }
+    };
+
     if (this.workerTicker) {
       this.workerTicker.stop();
     }
     if (typeof HighRateWorkerTicker !== "undefined") {
-      this.workerTicker = new HighRateWorkerTicker(() => {
-        if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-          const now = performance.now();
-          // Minimum 1.8ms spacing between pump packets to allow up to 500 Hz streaming
-          if (now - this._lastSendTime >= 1.8) {
-            this.sendInputNow(false);
-          }
-        }
-      }, 2); // 2ms tick interval
+      this.workerTicker = new HighRateWorkerTicker(pumpTick, 2); // 2ms tick interval
       this.workerTicker.start();
     } else {
       if (this._transmitTimer) clearInterval(this._transmitTimer);
-      this._transmitTimer = setInterval(() => {
-        if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-          const now = performance.now();
-          if (now - this._lastSendTime >= 2.0) {
-            this.sendInputNow(false);
-          }
-        }
-      }, 4);
+      this._transmitTimer = setInterval(pumpTick, 4);
     }
 
     const loop = () => {
       const now = performance.now();
 
-      // Prioritize active touch inputs or button holds every display frame
-      const anyButtonPressed = Object.values(this.buttons).some(Boolean);
-      if (
-        this.authenticated &&
-        this.connected && (
-          this.leftStickActive ||
-          this.rightStickActive ||
-          this.throttle > 0 ||
-          this.brake > 0 ||
-          this.gyroEnabled ||
-          anyButtonPressed
-        )
-      ) {
-        if (now - this._lastSendTime >= 1.5) {
+      if (this.authenticated && this.connected && this._isInputActiveOrChanged()) {
+        if (now - this._lastSendTime >= 2.0) {
           this.sendInputNow(false);
         }
       }
 
-      if (now - lastPing >= 1000) {
-        lastPing = now;
-        if (this.authenticated && this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify({ type: "PING", ts: now }));
+      if (now - lastPing >= 500) {
+        if (
+          this.authenticated &&
+          this.connected &&
+          this.ws &&
+          this.ws.readyState === WebSocket.OPEN &&
+          this.ws.bufferedAmount <= 128
+        ) {
+          lastPing = now;
+          try {
+            this.ws.send(JSON.stringify({ type: "PING", ts: now }));
+          } catch (_) {}
         }
       }
 

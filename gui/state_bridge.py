@@ -315,18 +315,6 @@ class TelemetryBridge:
             slot.latest_raw_angle = raw_angle
             slot.latest_filtered_angle = filtered_angle
 
-            # Direct high-frequency packet telemetry history (captures every flick & micro-movement)
-            slot.stick_x_history.append((now, slot.stick_x))
-            slot.stick_y_history.append((now, slot.stick_y))
-            slot.right_stick_x_history.append((now, slot.right_stick_x))
-            slot.right_stick_y_history.append((now, slot.right_stick_y))
-            slot.throttle_history.append((now, slot.throttle))
-            slot.brake_history.append((now, slot.brake))
-            slot.raw_angle_history.append((now, raw_angle))
-            slot.kalman_angle_history.append((now, filtered_angle))
-            if client_rtt > 0:
-                slot.latency_history.append((now, client_rtt))
-
             # Per-slot rate
             dq = self._last_packet_times[slot_index]
             dq.append(now)
@@ -335,21 +323,39 @@ class TelemetryBridge:
                 if span > 0:
                     slot.packet_rate_hz = round((len(dq) - 1) / span, 1)
 
+            # Cap oscilloscope time-series history appends to ~125 Hz (8ms) after initial warmup
+            # to eliminate 9,000+/sec tuple allocations during Wi-Fi A-MPDU bursts
+            should_append_wave = (slot.total_packets <= 10) or ((now - slot.last_packet_recorded) >= 0.008)
+            if should_append_wave:
+                slot.last_packet_recorded = now
+                slot.stick_x_history.append((now, slot.stick_x))
+                slot.stick_y_history.append((now, slot.stick_y))
+                slot.right_stick_x_history.append((now, slot.right_stick_x))
+                slot.right_stick_y_history.append((now, slot.right_stick_y))
+                slot.throttle_history.append((now, slot.throttle))
+                slot.brake_history.append((now, slot.brake))
+                slot.raw_angle_history.append((now, raw_angle))
+                slot.kalman_angle_history.append((now, filtered_angle))
+                if client_rtt > 0:
+                    slot.latency_history.append((now, client_rtt))
+
             # Update live stats for primary slot
             primary_slot = self._get_primary_active_slot()
             if slot_index == primary_slot:
                 self.latest_raw_angle = raw_angle
                 self.latest_filtered_angle = filtered_angle
-                self.raw_angle_history.append((now, raw_angle))
-                self.kalman_angle_history.append((now, filtered_angle))
-                self.stick_x_history.append((now, slot.stick_x))
-                self.stick_y_history.append((now, slot.stick_y))
-                self.right_stick_x_history.append((now, slot.right_stick_x))
-                self.right_stick_y_history.append((now, slot.right_stick_y))
-                self.throttle_history.append((now, slot.throttle))
-                self.brake_history.append((now, slot.brake))
+                if should_append_wave:
+                    self.raw_angle_history.append((now, raw_angle))
+                    self.kalman_angle_history.append((now, filtered_angle))
+                    self.stick_x_history.append((now, slot.stick_x))
+                    self.stick_y_history.append((now, slot.stick_y))
+                    self.right_stick_x_history.append((now, slot.right_stick_x))
+                    self.right_stick_y_history.append((now, slot.right_stick_y))
+                    self.throttle_history.append((now, slot.throttle))
+                    self.brake_history.append((now, slot.brake))
                 if client_rtt > 0:
-                    self.latency_history.append((now, client_rtt))
+                    if should_append_wave:
+                        self.latency_history.append((now, client_rtt))
                     if self.min_rtt_ms == 0.0 or client_rtt < self.min_rtt_ms:
                         self.min_rtt_ms = client_rtt
                     if client_rtt > self.max_rtt_ms:

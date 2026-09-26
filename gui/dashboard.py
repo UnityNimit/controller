@@ -220,7 +220,7 @@ def should_show_terms_on_startup() -> bool:
 
 def save_terms_preference(dont_show: bool) -> None:
     """Persists the user's terms acceptance and startup modal preference across multiple fallback locations."""
-    data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "1.0.0"}
+    data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "1.1.0"}
     content = json.dumps(data, indent=2)
     for config_path in _get_config_candidate_paths():
         try:
@@ -578,7 +578,7 @@ class SetupWizardDialog(ctk.CTkToplevel):
 
                 lbl_drv_status = ctk.CTkLabel(
                     self.action_bar,
-                    text="✓ VIGEMBUS DRIVER IS INSTALLED & ACTIVE",
+                    text="[OK] VIGEMBUS DRIVER IS INSTALLED & ACTIVE",
                     font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
                     text_color="#00f59b",
                     fg_color=COLOR_SURFACE,
@@ -1617,6 +1617,8 @@ class PlayerDeckCard(ctk.CTkFrame):
         self._last_meta_str: str = ""
         self._last_pct_l: int = -1
         self._last_pct_r: int = -1
+        self._last_pkts: int = -1
+        self._osc_tick: int = 0
         self._disconnected_drawn: bool = False
 
         # Header Row
@@ -1811,9 +1813,11 @@ class PlayerDeckCard(ctk.CTkFrame):
             self._last_connected = connected
             if connected:
                 self._disconnected_drawn = False
+                self._last_pkts = -1
                 self.configure(border_color=COLOR_CARD_ACTIVE)
                 self.lbl_status.configure(text="LIVE", text_color="#08090b", fg_color=COLOR_WHITE)
             else:
+                self._last_pkts = -1
                 self.configure(border_color=COLOR_CARD_BORDER)
                 self.lbl_status.configure(text="WAIT", text_color=COLOR_TEXT_MUTED, fg_color="#161b22")
                 self.lbl_meta.configure(text="--", text_color=COLOR_TEXT_MUTED)
@@ -1844,11 +1848,34 @@ class PlayerDeckCard(ctk.CTkFrame):
                 self.osc_kalman.clear_traces()
             return
 
+        pkts = slot_data.get("packets", 0)
+        l_rumble = slot_data.get("large_motor_rumble", 0)
+        r_rumble = slot_data.get("small_motor_rumble", 0)
+        norm_l = min(1.0, max(0.0, l_rumble / 255.0 if l_rumble <= 255 else l_rumble / 65535.0))
+        norm_r = min(1.0, max(0.0, r_rumble / 255.0 if r_rumble <= 255 else r_rumble / 65535.0))
+        pct_l = int(norm_l * 100)
+        pct_r = int(norm_r * 100)
+
+        # Update per-controller Haptic Force-Feedback VU meters
+        if pct_l != self._last_pct_l:
+            self._last_pct_l = pct_l
+            self.prog_haptic_l.set(norm_l)
+            self.lbl_haptic_l.configure(text=f"L-MTR {pct_l}%", text_color=COLOR_WHITE if pct_l > 0 else COLOR_TEXT_MUTED)
+        if pct_r != self._last_pct_r:
+            self._last_pct_r = pct_r
+            self.prog_haptic_r.set(norm_r)
+            self.lbl_haptic_r.configure(text=f"R-MTR {pct_r}%", text_color=COLOR_WHITE if pct_r > 0 else COLOR_TEXT_MUTED)
+
+        # Fast-path skip if no new uplink packet arrived since last GUI frame
+        if pkts == self._last_pkts:
+            return
+        self._last_pkts = pkts
+        self._osc_tick += 1
+
         ip = slot_data.get("client_ip", "127.0.0.1")
         rtt = slot_data.get("rtt_ms", 0.0)
         hz = slot_data.get("hz", 0.0)
-        pkts = slot_data.get("packets", 0)
-        meta_str = f"{ip} • {rtt:.1f}ms • {hz:.0f}Hz • {pkts}p"
+        meta_str = f"{ip} | {rtt:.1f}ms | {hz:.0f}Hz | {pkts}p"
         if meta_str != self._last_meta_str:
             self._last_meta_str = meta_str
             self.lbl_meta.configure(text=meta_str, text_color=COLOR_TEXT_PRIMARY)
@@ -1862,23 +1889,10 @@ class PlayerDeckCard(ctk.CTkFrame):
         )
         self.buttons.set_states(slot_data.get("buttons", {}))
 
-        # Update per-controller Haptic Force-Feedback VU meters
-        l_rumble = slot_data.get("large_motor_rumble", 0)
-        r_rumble = slot_data.get("small_motor_rumble", 0)
-        norm_l = min(1.0, max(0.0, l_rumble / 255.0 if l_rumble <= 255 else l_rumble / 65535.0))
-        norm_r = min(1.0, max(0.0, r_rumble / 255.0 if r_rumble <= 255 else r_rumble / 65535.0))
-        pct_l = int(norm_l * 100)
-        pct_r = int(norm_r * 100)
-        if pct_l != self._last_pct_l:
-            self._last_pct_l = pct_l
-            self.prog_haptic_l.set(norm_l)
-            self.lbl_haptic_l.configure(text=f"L-MTR {pct_l}%", text_color=COLOR_WHITE if pct_l > 0 else COLOR_TEXT_MUTED)
-        if pct_r != self._last_pct_r:
-            self._last_pct_r = pct_r
-            self.prog_haptic_r.set(norm_r)
-            self.lbl_haptic_r.configure(text=f"R-MTR {pct_r}%", text_color=COLOR_WHITE if pct_r > 0 else COLOR_TEXT_MUTED)
+        # Throttle heavy Tkinter canvas polyline redraws to 30 FPS to keep GIL free
+        if (self._osc_tick & 1) != 0 and self._osc_tick > 2:
+            return
 
-        # Always update live rolling waveforms for this connected player
         lat_wave = slot_data.get("latency_wave", [])
         if lat_wave:
             self.osc_latency.update_trace("latency", lat_wave, current_val=slot_data.get("rtt_ms"))
@@ -2353,7 +2367,7 @@ class ControllerDashboard(ctk.CTk):
         self._resize_timer = None
 
     def _render_loop(self) -> None:
-        """Continuous, ultra-responsive up to ~300 FPS render pump for all 4 player decks."""
+        """Continuous 60 FPS render pump for all 4 player decks without starving network GIL."""
         if self._is_resizing:
             # Yield main thread to Windows DWM during live window resize dragging
             self.after(35, self._render_loop)
@@ -2368,8 +2382,8 @@ class ControllerDashboard(ctk.CTk):
             if i < len(self.player_decks):
                 self.player_decks[i].update_state(sdata)
 
-        # Slow text updates (~5Hz, every 60 ticks)
-        if self._tick % 60 == 0:
+        # Slow text updates (~5Hz, every 12 ticks at 60FPS)
+        if self._tick % 12 == 0:
             url = snap.get("server_url", "")
             if url and url != self._last_url:
                 self.lbl_url.configure(text=url)
@@ -2402,8 +2416,8 @@ class ControllerDashboard(ctk.CTk):
                 self._last_hz_str = hz_str
                 self.lbl_hz.configure(text=hz_str)
 
-        # Log Ticker (~4Hz, every 75 ticks)
-        if self._tick % 75 == 0:
+        # Log Ticker (~4Hz, every 15 ticks at 60FPS)
+        if self._tick % 15 == 0:
             last_entry = None
             while True:
                 try:
@@ -2413,8 +2427,8 @@ class ControllerDashboard(ctk.CTk):
             if last_entry:
                 self.lbl_log.configure(text=f"[{last_entry['timestamp']}] {last_entry['message']}")
 
-        # Next frame in 3ms (~300 FPS target)
-        self.after(3, self._render_loop)
+        # Next frame in 16ms (60 FPS target)
+        self.after(16, self._render_loop)
 
     def _on_window_close(self) -> None:
         if self.on_close_callback:

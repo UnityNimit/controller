@@ -131,7 +131,7 @@ def test_mobile_client_assets_and_integrity():
         assert resp_index.status_code == 200
         index_text = resp_index.body.decode("utf-8")
         assert "<title>Controller</title>" in index_text
-        assert "VERSION 1.0.0" in index_text
+        assert "VERSION 1.1.0" in index_text
         assert "logo.png" in index_text
         assert "controller-app" in index_text
         assert "mod-gyro" in index_text
@@ -798,4 +798,83 @@ def test_multi_client_live_slot_switching_and_no_donations():
     asyncio.run(_multi_switch_test())
 
 
+def test_anti_bufferbloat_and_low_latency_burst_resilience():
+    """Verify anti-bufferbloat client guards, adaptive pump, O(1) deque firewall, and low-jitter burst handling."""
+    import time
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    cockpit_js = (root / "client" / "js" / "cockpit.js").read_text(encoding="utf-8")
+
+    # 1. Verify client anti-bufferbloat & adaptive rate control in cockpit.js
+    assert "this.ws.bufferedAmount > 256" in cockpit_js
+    assert "_isInputActiveOrChanged()" in cockpit_js
+    assert "_rttSamples" in cockpit_js
+    assert "this.ws.bufferedAmount <= 128" in cockpit_js
+
+    # 2. Verify AnomalyFirewall uses O(1) deque and accepts Wi-Fi A-MPDU bursts
+    from collections import deque
+    from gateway.security import AnomalyFirewall
+    from gateway.kernel_transport import BINARY_STRUCT, BINARY_PACKET_MAGIC, BINARY_PACKET_VERSION
+
+    fw = AnomalyFirewall()
+    for seq in range(1, 51):
+        accepted, reason = fw.inspect_packet("burst_client", seq, 1000.0 + seq * 0.0001)
+        assert accepted is True, f"Burst packet {seq} was dropped: {reason}"
+    assert isinstance(fw.packet_count_window["burst_client"], deque)
+
+    # 3. Verify live server handles 50-packet A-MPDU burst + PING with zero disconnects & zero idle TELEMETRY spam
+    async def _burst_test():
+        from gui.state_bridge import TelemetryBridge
+        test_port = 8127
+        bridge = TelemetryBridge()
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True,
+            bridge=bridge,
+        )
+        await server.start()
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+            async with websockets.connect(url) as ws:
+                ch = json.loads(await ws.recv())
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                payload = f"{nonce}:{ts}".encode("utf-8")
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, payload, hashlib.sha256).hexdigest()
+                await ws.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "burst_phone",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig,
+                    "preferred_slot": 1,
+                }))
+                auth = json.loads(await ws.recv())
+                assert auth["type"] == "AUTH_SUCCESS"
+
+                # Blast 50 binary packets in an instantaneous burst + PING
+                for seq in range(1, 51):
+                    pkt = BINARY_STRUCT.pack(
+                        BINARY_PACKET_MAGIC,
+                        BINARY_PACKET_VERSION,
+                        seq,
+                        seq * 2,
+                        12000, -8000, 0, 0,
+                        200, 0, 1,
+                        0, 0, 5
+                    )
+                    await ws.send(pkt)
+
+                t0 = time.perf_counter() * 1000.0
+                await ws.send(json.dumps({"type": "PING", "ts": t0}))
+                pong_raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                pong = json.loads(pong_raw)
+                assert pong["type"] == "PONG"
+                rtt_ms = (time.perf_counter() * 1000.0) - float(pong["ts"])
+                assert rtt_ms < 50.0
+        finally:
+            await server.stop()
+
+    asyncio.run(_burst_test())
 

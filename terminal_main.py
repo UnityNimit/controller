@@ -39,7 +39,7 @@ def setup_console():
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
             try:
-                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Controller.Terminal.1.0.0")
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Controller.Terminal.1.1.0")
             except Exception:
                 pass
         except Exception:
@@ -159,11 +159,11 @@ async def run_terminal_mode(port: int = 8443, use_ssl: bool = True):
 
 def main():
     if any(arg in sys.argv for arg in ("--version", "-v", "-V")):
-        print("Controller Terminal Edition v1.0.0 (Zero-GUI Max Performance)")
+        print("Controller Terminal Edition v1.1.0 (Zero-GUI Max Performance)")
         sys.exit(0)
 
     if any(arg in sys.argv for arg in ("--help", "-h", "/?")):
-        print("Controller Terminal Edition v1.0.0 - Zero-GUI Max Performance Server\n")
+        print("Controller Terminal Edition v1.1.0 - Zero-GUI Max Performance Server\n")
         print("Usage:")
         print("  Controller-Terminal.exe [options]\n")
         print("Options:")

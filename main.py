@@ -40,7 +40,7 @@ def setup_console():
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
             # Ensure taskbar groups with custom application icon
             try:
-                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Controller.Gamepad.1.0.0")
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Controller.Gamepad.1.1.0")
             except Exception:
                 pass
         except Exception:
@@ -120,11 +120,11 @@ def start_gui_app():
 
 def main():
     if any(arg in sys.argv for arg in ("--version", "-v", "-V")):
-        print("Controller v1.0.0")
+        print("Controller v1.1.0")
         sys.exit(0)
 
     if any(arg in sys.argv for arg in ("--help", "-h", "/?")):
-        print("Controller v1.0.0 - High-Performance Mobile Gamepad Server\n")
+        print("Controller v1.1.0 - High-Performance Mobile Gamepad Server\n")
         print("Usage:")
         print("  Controller.exe [options]\n")
         print("Options:")

@@ -180,6 +180,7 @@ class ViGEmXInputGamepad(AbstractGamepad):
             "DPAD_LEFT": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT,
             "DPAD_RIGHT": vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT,
         }
+        self._button_states: Dict[str, bool] = {}
         self._register_rumble_cb()
         self.reset()
         logger.info(f"Initialized native ViGEmBus Virtual Xbox 360 controller for Player {player_index + 1}")
@@ -232,9 +233,13 @@ class ViGEmXInputGamepad(AbstractGamepad):
 
     def set_button(self, button_name: str, pressed: bool) -> None:
         btn_key = button_name.upper()
+        pressed_bool = bool(pressed)
+        if self._button_states.get(btn_key) is pressed_bool:
+            return
+        self._button_states[btn_key] = pressed_bool
         btn = self.button_map.get(btn_key)
         if btn is not None:
-            if pressed:
+            if pressed_bool:
                 self.gamepad.press_button(button=btn)
             else:
                 self.gamepad.release_button(button=btn)
@@ -243,6 +248,7 @@ class ViGEmXInputGamepad(AbstractGamepad):
         self.gamepad.update()
 
     def reset(self) -> None:
+        self._button_states.clear()
         self.gamepad.reset()
         self.gamepad.update()
 
@@ -682,6 +688,15 @@ class InputManager:
             self._last_input_time[client_id] = t
             ctrl = self.controllers[slot]
             try:
+                mcu = getattr(self, "mcu_dispatcher", None)
+                mcu_active = mcu is not None and mcu._running
+                is_mock = getattr(ctrl, "is_mock", False)
+
+                # Pillar 1 & 2: Asynchronous high-rate dispatch via Virtual MCU Engine
+                if mcu_active and not is_mock:
+                    mcu.update_slot_input(slot, control_state, timestamp=t, rtt_ms=rtt_ms)
+                    return True
+
                 if "stick_x" in control_state or "stick_y" in control_state:
                     sx = control_state.get("stick_x", 0)
                     sy = control_state.get("stick_y", 0)
@@ -702,9 +717,8 @@ class InputManager:
                     for btn_name, pressed in control_state["buttons"].items():
                         ctrl.set_button(btn_name, pressed)
 
-                # Pillar 1 & 2: Asynchronous high-rate dispatch via Virtual MCU Engine
-                if getattr(self, "mcu_dispatcher", None) is not None and self.mcu_dispatcher._running:
-                    self.mcu_dispatcher.update_slot_input(slot, control_state, timestamp=t, rtt_ms=rtt_ms)
+                if mcu_active:
+                    mcu.update_slot_input(slot, control_state, timestamp=t, rtt_ms=rtt_ms)
                 else:
                     ctrl.update()
             except Exception as e:

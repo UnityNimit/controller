@@ -9,7 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 APP_NAME: str = "Controller"
-APP_VERSION: str = "1.0.0"
+APP_VERSION: str = "1.1.0"
 
 if getattr(sys, 'frozen', False):
     BUNDLE_DIR = Path(sys._MEIPASS)
@@ -66,13 +66,13 @@ class SecurityConfig:
     HMAC_SHARED_SECRET: bytes = os.getenv("CONTROLLER_SECRET", "controller-cyber-physical-key-2026").encode("utf-8")
     
     # Handshake expiration timeout in seconds
-    HANDSHAKE_TIMEOUT_SEC: float = 3.0
+    HANDSHAKE_TIMEOUT_SEC: float = 8.0
     
-    # Anomaly Firewall: Max allowed client packet frequency (Hz) - Unconstrained 1000Hz peak
-    MAX_PACKET_RATE_HZ: float = 1000.0
+    # Anomaly Firewall: Max allowed client packet frequency (Hz) - Unconstrained burst-tolerant peak
+    MAX_PACKET_RATE_HZ: float = 2000.0
     
-    # Anomaly Firewall: Minimum valid packet inter-arrival time (seconds) - 0.1ms ceiling
-    MIN_INTER_ARRIVAL_SEC: float = 0.0001
+    # Anomaly Firewall: Minimum valid packet inter-arrival time (seconds) - Wi-Fi A-MPDU aggregation safe
+    MIN_INTER_ARRIVAL_SEC: float = 0.0
     
     # Maximum consecutive timing violations before dropping / blacklisting client
     MAX_ANOMALY_BURSTS: int = 50

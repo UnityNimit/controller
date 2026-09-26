@@ -99,7 +99,11 @@ class VirtualMcuDispatcher:
         self._winmm_active = False
 
     def _setup_windows_timer(self) -> None:
-        """Sets Windows timer resolution to 1ms (or 0.5ms) via winmm.dll."""
+        """Sets Windows timer resolution to 0.5ms - 1ms via winmm.dll and ntdll.dll."""
+        try:
+            sys.setswitchinterval(0.0005)
+        except Exception:
+            pass
         if platform.system() == "Windows":
             try:
                 winmm = ctypes.windll.winmm
@@ -108,6 +112,12 @@ class VirtualMcuDispatcher:
                     logger.debug("Windows multimedia timer resolution set to 1ms (timeBeginPeriod)")
             except Exception as e:
                 logger.debug(f"Could not initialize Windows multimedia timer: {e}")
+            try:
+                ntdll = ctypes.windll.ntdll
+                current_res = ctypes.c_ulong(0)
+                ntdll.NtSetTimerResolution(5000, True, ctypes.byref(current_res))
+            except Exception:
+                pass
 
     def _teardown_windows_timer(self) -> None:
         """Restores default Windows timer resolution."""
@@ -210,17 +220,10 @@ class VirtualMcuDispatcher:
     def _mcu_loop(self) -> None:
         """
         High-precision dispatch loop.
-        Runs at the exact target interval (e.g. 1.000 ms for 1000 Hz, 0.200 ms for 5000 Hz).
+        Runs at the exact target interval (e.g. 1.000 ms for 1000 Hz, 0.200 ms for 5000 Hz)
+        while explicitly yielding the Python GIL every tick so network/WebSocket threads
+        experience zero GIL contention or ping spikes.
         """
-        # Elevate current thread priority on Windows
-        if platform.system() == "Windows":
-            try:
-                ctypes.windll.kernel32.SetThreadPriority(
-                    ctypes.windll.kernel32.GetCurrentThread(), 2
-                )
-            except Exception:
-                pass
-
         next_tick = time.perf_counter()
 
         # Rolling statistics window (sampled every 250 reports)
@@ -234,11 +237,14 @@ class VirtualMcuDispatcher:
         while self._running and not self._stop_event.is_set():
             t_start = time.perf_counter()
 
-            # 1. Dispatch latched or predictive interpolated state to all active controllers
+            # 1. Dispatch latched or predictive interpolated state to active controllers
             for slot_idx in range(min(len(self.controllers), self.max_slots)):
                 ctrl = self.controllers[slot_idx]
+                is_mock = getattr(ctrl, "is_mock", False) or ctrl.__class__.__name__ == "MockGamepad"
                 with self._latch_locks[slot_idx]:
                     latch = self.latches[slot_idx]
+                    if not latch.has_active_client and not is_mock:
+                        continue
 
                     # Pillar 2: Sample smooth micro-interpolated and latency-compensated analog coordinates
                     interp = None
@@ -264,10 +270,6 @@ class VirtualMcuDispatcher:
 
                     # 1000 Hz Sub-Perceptual Active State Dither:
                     # Windows XInput only increments dwPacketNumber when controller state bytes change.
-                    # When a client is connected and active (e.g. holding buttons or centered stick):
-                    # We alternate an imperceptible 1-unit LSB dither (0 or 1 out of 32,767 -> 0.003%)
-                    # so that XInput registers continuous packet updates at 1000 Hz even during stationary holds.
-                    is_mock = getattr(ctrl, "is_mock", False) or ctrl.__class__.__name__ == "MockGamepad"
                     if latch.has_active_client and not is_mock:
                         if sx == 0 and sy == 0:
                             sx = 1 if (self.total_dispatches & 1) else 0
@@ -320,7 +322,7 @@ class VirtualMcuDispatcher:
                 reports_in_window = 0
                 last_stat_time = now_stat
 
-            # 3. High-precision schedule next frame
+            # 3. High-precision schedule next frame with explicit GIL release
             target_int = self.interval
             next_tick += target_int
 
@@ -330,14 +332,22 @@ class VirtualMcuDispatcher:
             # If behind schedule (e.g. OS interrupt / frame drop), skip forward to prevent cascade
             if remaining < -0.010:
                 next_tick = now + target_int
+                time.sleep(0)
                 continue
 
-            # Hybrid Sleep + Microsecond Spinlock
+            # Hybrid Sleep + GIL-Cooperative Microsecond Spinlock
             if self.enable_hybrid_spinlock:
-                if remaining > 0.0012:
-                    time.sleep(remaining - 0.0008)
+                if remaining > 0.0015:
+                    time.sleep(remaining - 0.0010)
+                else:
+                    # Explicitly release and re-acquire Python GIL in C so asyncio network
+                    # threads can immediately service incoming WebSocket packets & PINGs
+                    time.sleep(0)
+                spin_iters = 0
                 while time.perf_counter() < next_tick:
-                    pass
+                    spin_iters += 1
+                    if (spin_iters & 15) == 0:
+                        time.sleep(0)
             else:
                 if remaining > 0.0001:
                     time.sleep(remaining)

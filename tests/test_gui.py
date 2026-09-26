@@ -124,6 +124,9 @@ def test_logo_and_terms_dialog_helpers(tmp_path, monkeypatch):
 
     # 3. Test Terms preference persistence in isolated directory
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path))
     # Default should show
     assert should_show_terms_on_startup() is True
 
@@ -133,7 +136,7 @@ def test_logo_and_terms_dialog_helpers(tmp_path, monkeypatch):
 
     import json
     cfg = json.loads((tmp_path / ".controller_config.json").read_text(encoding="utf-8"))
-    assert cfg.get("version") == "1.0.0"
+    assert cfg.get("version") == "1.1.0"
 
     # Save preference dont_show=False
     save_terms_preference(dont_show=False)
@@ -141,7 +144,7 @@ def test_logo_and_terms_dialog_helpers(tmp_path, monkeypatch):
 
     from config import settings
     assert settings.APP_NAME == "Controller"
-    assert settings.APP_VERSION == "1.0.0"
+    assert settings.APP_VERSION == "1.1.0"
 
 
 def test_independent_per_slot_dsp_and_rumble():

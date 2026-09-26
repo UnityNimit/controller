@@ -10,6 +10,7 @@ import hashlib
 import secrets
 import time
 import logging
+from collections import deque
 from typing import Dict, Optional, Tuple, Set, Any
 
 logger = logging.getLogger("Controller.Security")
@@ -96,8 +97,8 @@ class AnomalyFirewall:
     """
     def __init__(
         self,
-        max_rate_hz: float = 1000.0,
-        min_inter_arrival_sec: float = 0.0001,
+        max_rate_hz: float = 2000.0,
+        min_inter_arrival_sec: float = 0.0,
         max_consecutive_anomalies: int = 50
     ):
         self.max_rate_hz = float(max_rate_hz)
@@ -108,7 +109,7 @@ class AnomalyFirewall:
         self.last_packet_time: Dict[str, float] = {}
         self.last_seq_num: Dict[str, int] = {}
         self.anomaly_count: Dict[str, int] = {}
-        self.packet_count_window: Dict[str, list] = {}
+        self.packet_count_window: Dict[str, deque] = {}
 
     def inspect_packet(self, client_id: str, seq: int, client_time: float, is_neutral: bool = False) -> Tuple[bool, Optional[str]]:
         """
@@ -148,12 +149,15 @@ class AnomalyFirewall:
                     return False, f"INTER_ARRIVAL_VIOLATION: dt {dt*1000:.2f}ms < {self.min_inter_arrival*1000:.1f}ms limit"
 
             # 3. Frequency Rate Limiting Window (1.0 second sliding window)
-            timestamps = self.packet_count_window.setdefault(client_id, [])
+            timestamps = self.packet_count_window.get(client_id)
+            if timestamps is None:
+                timestamps = deque()
+                self.packet_count_window[client_id] = timestamps
             timestamps.append(now)
-            # Purge timestamps older than 1.0s
+            # Purge timestamps older than 1.0s in O(1)
             cutoff = now - 1.0
             while timestamps and timestamps[0] < cutoff:
-                timestamps.pop(0)
+                timestamps.popleft()
 
             if len(timestamps) > self.max_rate_hz:
                 self._record_anomaly(client_id)

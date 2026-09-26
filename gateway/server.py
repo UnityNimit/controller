@@ -220,10 +220,12 @@ class ControllerGatewayServer:
         self._running = False
         self._server = None
         self._downlink_task: Optional[asyncio.Task] = None
+        self._last_telemetry_rx_time: float = 0.0
 
     def _on_game_telemetry(self, telemetry_frame: Dict[str, Any]) -> None:
         """Callback triggered when new UDP or simulated telemetry is received."""
         self.latest_telemetry = telemetry_frame
+        self._last_telemetry_rx_time = time.perf_counter()
 
     async def _handle_http_request(self, connection, request) -> Optional[Any]:
         """Serves client static files over HTTP. Returns None to permit WebSocket upgrades."""
@@ -344,11 +346,9 @@ class ControllerGatewayServer:
                 curve_gamma=settings.filters.STEERING_CURVE_GAMMA,
                 jerk_threshold=settings.filters.JERK_HANDBRAKE_THRESHOLD
             )
-            self.active_clients[websocket] = client_id
-            self.client_sockets[client_id] = websocket
             self.firewall.reset_client(client_id)
 
-            # Send Auth Success with Player Slot & Theme Color
+            # Send Auth Success BEFORE adding to active_clients so downlink broadcasts never race with AUTH_SUCCESS
             player_color = settings.clients.PLAYER_COLORS[player_slot % len(settings.clients.PLAYER_COLORS)]
             await websocket.send(json.dumps({
                 "type": "AUTH_SUCCESS",
@@ -360,6 +360,9 @@ class ControllerGatewayServer:
                     "deadband": settings.filters.STEERING_DEADBAND_DEG
                 }
             }))
+            self.active_clients[websocket] = client_id
+            self.client_sockets[client_id] = websocket
+
             logger.info(f"Client [{client_id[:8]}] authenticated successfully -> Player {player_slot + 1}")
             if self.bridge is not None:
                 self.bridge.register_client(player_slot, client_id, client_ip)
@@ -368,8 +371,23 @@ class ControllerGatewayServer:
             self.pulse_test_slot(player_slot)
 
             # Phase 3: Telemetry Uplink Processing Loop
+            last_qos_t = 0.0
+            qos_count = 0
+            sync_burst_count = 0
+            ws_msgs = getattr(websocket, "messages", None)
             async for message in websocket:
+                sync_burst_count += 1
+                if (sync_burst_count & 7) == 0:
+                    await asyncio.sleep(0)
                 if isinstance(message, bytes):
+                    if (
+                        ws_msgs
+                        and len(message) == 24
+                        and isinstance(ws_msgs[0], bytes)
+                        and len(ws_msgs[0]) == 24
+                        and ws_msgs[0][18:20] == message[18:20]
+                    ):
+                        continue
                     data = decode_binary_packet(message)
                     if data is None:
                         continue
@@ -411,8 +429,8 @@ class ControllerGatewayServer:
                     pipeline = self.pipelines[client_id]
 
                     # Process Steering & Thumbstick (Manual thumbstick always takes priority over gyro)
-                    manual_sx = int(data.get("stick_x", 0))
-                    manual_sy = int(data.get("stick_y", 0))
+                    manual_sx = raw_stick_x
+                    manual_sy = raw_stick_y
                     if data.get("gyro_enabled", False) and "angle" in data and abs(manual_sx) <= 500 and abs(manual_sy) <= 500:
                         raw_angle = float(data.get("angle", 0.0))
                         stick_x, filtered_angle, _ = pipeline.process_steering(raw_angle)
@@ -422,17 +440,11 @@ class ControllerGatewayServer:
                         stick_x = manual_sx
 
                     stick_y = manual_sy
-                    right_stick_x = int(data.get("right_stick_x", 0))
-                    right_stick_y = int(data.get("right_stick_y", 0))
-
+                    right_stick_x = raw_right_x
+                    right_stick_y = raw_right_y
 
                     # Process Triggers (Gas & Brake)
-                    raw_th = float(data.get("throttle", 0.0))
-                    raw_br = float(data.get("brake", 0.0))
                     th_byte, br_byte = pipeline.process_triggers(raw_th, raw_br)
-
-                    # Digital Buttons strictly from client input (no ghost triggers)
-                    buttons = data.get("buttons", {})
 
                     # Dispatch to OS Virtual Gamepad
                     control_state = {
@@ -445,30 +457,34 @@ class ControllerGatewayServer:
                         "buttons": buttons
                     }
                     # Safety check: if slot was somehow lost during a reconnect race, re-acquire it
-                    if self.input_manager.get_slot(client_id) is None:
-                        self.input_manager.allocate_slot(client_id, preferred_slot=player_slot)
+                    curr_slot = self.input_manager.get_slot(client_id)
+                    if curr_slot is None:
+                        curr_slot = self.input_manager.allocate_slot(client_id, preferred_slot=player_slot)
 
                     # Arrival timestamp using high-resolution monotonic clock (matching Virtual MCU)
                     arrival_ts = time.perf_counter()
                     client_rtt = float(data.get("rtt", 5.0))
                     self.input_manager.dispatch(client_id, control_state, timestamp=arrival_ts, rtt_ms=client_rtt)
 
-                    # Record to QoS Flight Data Buffer
-                    qos_rec = self.qos_recorder.record_uplink(
-                        client_id=client_id,
-                        seq=seq,
-                        client_timestamp=client_ts,
-                        raw_steering=raw_angle,
-                        filtered_steering=filtered_angle,
-                        throttle=th_byte,
-                        brake=br_byte,
-                        handbrake=buttons.get("HANDBRAKE", False)
-                    )
-
-                    curr_slot = self.input_manager.get_slot(client_id)
-                    if self.bridge is not None and curr_slot is not None:
-                        client_rtt = float(data.get("rtt", 0.0))
+                    # Record to QoS Flight Data Buffer (throttled after initial warmup burst to prevent CPU/GC spikes)
+                    qos_count += 1
+                    dt_ms = 16.6
+                    if qos_count <= 250 or (arrival_ts - last_qos_t) >= 0.008:
+                        last_qos_t = arrival_ts
+                        qos_rec = self.qos_recorder.record_uplink(
+                            client_id=client_id,
+                            seq=seq,
+                            client_timestamp=client_ts,
+                            raw_steering=raw_angle,
+                            filtered_steering=filtered_angle,
+                            throttle=th_byte,
+                            brake=br_byte,
+                            handbrake=buttons.get("HANDBRAKE", False),
+                            reception_timestamp=arrival_ts
+                        )
                         dt_ms = qos_rec.get("inter_arrival_ms", 16.6)
+
+                    if self.bridge is not None and curr_slot is not None:
                         self.bridge.record_input(
                             slot_index=curr_slot,
                             client_id=client_id,
@@ -508,7 +524,7 @@ class ControllerGatewayServer:
                         logger.info(f"Calibrated zero steering offset for Player {slot_str} at {angle:.2f}°")
 
                 elif msg_type == "PING":
-                    await websocket.send(json.dumps({"type": "PONG", "ts": data.get("ts", time.time())}))
+                    await self._send_safe(websocket, json.dumps({"type": "PONG", "ts": data.get("ts", time.time())}))
 
         except websockets.exceptions.ConnectionClosed:
             pass
@@ -691,14 +707,15 @@ class ControllerGatewayServer:
         return True
 
     async def _downlink_telemetry_loop(self) -> None:
-        """Broadcasts live game telemetry and dynamic haptic triggers to connected phones at 60 Hz."""
+        """Monitors deadman's switch watchdog and broadcasts live game telemetry when active."""
         interval = 1.0 / settings.network.TELEMETRY_BROADCAST_RATE_HZ
         while self._running:
             start_t = time.perf_counter()
-            # Tick deadman's switch watchdog to neutral-reset silent controllers
-            self.input_manager.tick_watchdog(0.350)
+            # Tick deadman's switch watchdog (600ms tolerance prevents Wi-Fi micro-jitter dropouts)
+            self.input_manager.tick_watchdog(0.600)
 
-            if self.active_clients:
+            telemetry_active = self.enable_simulator or ((start_t - self._last_telemetry_rx_time) < 1.0)
+            if self.active_clients and telemetry_active:
                 telem = self.latest_telemetry
                 rpm = telem.get("rpm", 0.0)
                 max_rpm = telem.get("max_rpm", 8500.0)
@@ -731,8 +748,10 @@ class ControllerGatewayServer:
                 for ws in websockets_to_remove:
                     self.active_clients.pop(ws, None)
 
-            elapsed = time.perf_counter() - start_t
-            await asyncio.sleep(max(0.001, interval - elapsed))
+                elapsed = time.perf_counter() - start_t
+                await asyncio.sleep(max(0.001, interval - elapsed))
+            else:
+                await asyncio.sleep(0.050)
 
     def _render_ascii_banner(self, host_ips: list[str]) -> None:
         """Prints a clean, industrial terminal banner and QR code for rapid smartphone pairing."""
@@ -792,7 +811,7 @@ class ControllerGatewayServer:
         # Start Downlink Broadcast Task
         self._downlink_task = asyncio.create_task(self._downlink_telemetry_loop())
 
-        # Start Combined HTTP / WebSocket Server
+        # Start Combined HTTP / WebSocket Server (max_queue=512 eliminates TCP pause_reading backpressure spikes)
         self._server = await websockets.serve(
             self._handle_websocket,
             host=settings.network.HOST,
@@ -800,9 +819,10 @@ class ControllerGatewayServer:
             ssl=ssl_context,
             process_request=self._handle_http_request,
             compression=None,
-            ping_interval=10,
-            ping_timeout=5,
-            max_size=2**20
+            ping_interval=20,
+            ping_timeout=20,
+            max_size=2**20,
+            max_queue=512
         )
 
         self._render_ascii_banner(host_ips)
