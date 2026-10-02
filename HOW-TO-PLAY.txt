@@ -1,0 +1,82 @@
+========================================================================
+ CONTROLLER v1.1.0 - MOBILE-TO-PC WIRELESS GAMEPAD
+========================================================================
+
+TWO EDITIONS INCLUDED:
+------------------------------------------------------------------------
+1. Controller.exe (GUI Edition):
+   Full Tactical Telemetry GUI with live real-time oscilloscopes, visual 
+   slot cards, camera pairing QR display, and interactive buttons.
+
+2. Controller-Terminal.exe (Terminal Edition - Maximum Performance):
+   100% Zero-GUI console server for competitive low-latency gaming. 
+   Eliminates all GUI threads and graphics rendering for absolute 
+   minimum CPU jitter and 0ms UI overhead. Includes interactive terminal 
+   controls (type 's' to swap, 't' to test rumble, 'status' to view players).
+
+HOW TO PLAY ON ANY PC:
+------------------------------------------------------------------------
+STEP 1: (FIRST TIME ONLY ON A NEW PC)
+  Run "Install-Driver.bat" as Administrator.
+  (Or if Controller.exe is open, click "INSTALL DRIVER" on the top right!)
+  This installs the official ViGEmBus driver so Windows recognizes
+  your smartphone as genuine Xbox 360 controllers.
+
+STEP 2: LAUNCH CONTROLLER (CHOOSE YOUR EDITION)
+  Option A: Double-click "Controller.exe" for the Tactical GUI Dashboard.
+  Option B: Double-click "Controller-Terminal.exe" for Zero-GUI Max Performance.
+
+STEP 3: CONNECT YOUR PHONE
+  - Connect your smartphone to the same Wi-Fi network as this PC.
+    (Tip: Windows Mobile Hotspot provides the lowest possible latency!)
+  - Open your phone's camera and scan the QR Code (shown in GUI or Terminal).
+  - If a browser security warning appears, tap "Advanced" -> "Proceed"
+    (this is normal because the server generates local SSL certificates).
+  - Rotate your phone to Landscape mode.
+  - Done! Player 1 connects immediately on your PC screen!
+
+STEP 4: CONTROLLER CONTROLS & ERGONOMICS
+  - Left & Right Analog Sticks:
+    * 100% Pure continuous 360-degree circular motion with zero cardinal snapping.
+    * Rapid Touch-Off Flick Capture & Mechanical Spring Snapback Curve.
+      Optimized for trick detection in games like Skate and precision steering.
+  - Triggers & Bumpers:
+    * LT & RT: Instantaneous hair-trigger actuation (XInput 255) on touch with progressive touch pressure.
+    * LB & RB: High-speed shoulder bumpers.
+  - Action Buttons: Y, X, B, A diamond layout with center RS click.
+  - 6-DoF Gyroscope Motion Steering:
+    * Tap the center gyroscope circle anytime to toggle motion steering ON or OFF (default OFF).
+    * Includes discrete Kalman filtering and on-screen artificial horizon.
+  - Center Logo Dual-Function Navigation:
+    * Quick Tap: Opens the minimal Settings screen (slot selection, vibration toggle, reset controls).
+    * Hold 450ms: Enters Layout Customization mode to drag and resize buttons or change stick radius.
+
+STEP 5: PLAYER SLOT SWAPPING (FIFA & MULTIPLAYER FIX)
+  - If FIFA or another game assigns players in the wrong order:
+    * In Controller.exe: Tap [SWAP] on the Player Deck card, or click "SWAP P1 / P2".
+    * In Controller-Terminal.exe: Simply type 's' or 'swap' and hit Enter!
+    * On your Phone: Tap the center logo to open Settings and tap any Player slot (P1-P4).
+  - The slot manager atomically exchanges the two virtual XInput controllers,
+    instantly swapping Player 1 and Player 2 without disconnecting anyone!
+
+STEP 6: REAL FORCE-FEEDBACK HAPTICS
+  - Native dual-motor rumble feedback is extracted directly from the game
+    via ViGEmBus kernel notifications (crashes, tackles, ball kicks, engine revs, goal posts).
+  - Streamed to your phone at ultra-low latency with:
+    * Dual-tier multi-frequency physical motor pulses.
+    * Sub-bass acoustic tactile resonance (50Hz-70Hz) via the phone's speaker.
+  - Toggle vibration ON or OFF in the phone Settings screen (default OFF).
+  - TIP: For maximum haptic intensity, ensure your phone is NOT in silent/mute mode.
+
+STEP 7: TESTING WITH ONLINE TESTERS OR ANY PC GAME
+  - Online Tester: Open https://hardwaretester.com/gamepad or https://gamepad-tester.com
+    In Controller.exe, click [TEST] on P1, or in Controller-Terminal.exe type 't'.
+    Or click [PULSE] (or type 'p' in terminal) to wake up the tester.
+    The browser will immediately detect "Xbox 360 Controller (XInput STANDARD GAMEPAD)"!
+  - In Games: Launch any PC game (FIFA, Rocket League, GTA V, Elden Ring, Forza, etc.).
+    The controller is recognized natively as genuine Xbox 360 gamepads!
+
+SUPPORT:
+  Supports up to 4 simultaneous smartphones (Player 1, 2, 3, 4)
+  for local multiplayer split-screen gaming with dedicated live telemetry!
+========================================================================

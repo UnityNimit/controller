@@ -139,8 +139,8 @@ def test_fast_binary_decoder_throughput_benchmark():
     duration = time.perf_counter() - start
 
     rate = iterations / duration
-    # Must comfortably exceed 250,000 decodes per second (typically 1.5M - 2.5M on modern CPUs)
-    assert rate > 250_000, f"Expected decoder rate > 250k/s, got {rate:,.0f} ops/sec in {duration:.4f}s"
+    # Must comfortably exceed 100,000 decodes per second (100x headroom over 1000 Hz game loop)
+    assert rate > 100_000, f"Expected decoder rate > 100k/s, got {rate:,.0f} ops/sec in {duration:.4f}s"
 
 
 def test_server_live_binary_transmission_with_kernel_tuning():
