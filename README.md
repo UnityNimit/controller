@@ -218,14 +218,15 @@ If **Controller** saved you from buying an extra gamepad (or made couch co-op ni
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=%253CYOUR_USERNAME%253E%2F%253CYOUR_REPO%253E%2Ccontroller%2Fcontroller%2Cunitynimit%2Fcontroller&type=date&legend=top-left">
+## Star History
+
+<a href="https://www.star-history.com/?repos=unitynimit%2Fcontroller&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=unitynimit/controller&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=unitynimit/controller&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=unitynimit/controller&type=date&legend=top-left" />
  </picture>
 </a>
-</div>
 
 ---
 
