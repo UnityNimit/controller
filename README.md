@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎮 Controller `v1.1.0`
+# Controller
 
 **Turn any smartphone into a sub-5ms wireless Xbox 360 controller for Windows PC.**  
 *No app store downloads. No cables. No subscriptions. Just scan and play.*
@@ -22,7 +22,7 @@
 
 ---
 
-## 💡 The Idea
+## The Idea
 
 Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game with friends, only to realize you are short on gamepads? Every smartphone already carries a high-refresh multi-touch digitizer, a 6-axis gyroscope, and a haptic motor in your pocket.
 
@@ -30,7 +30,7 @@ Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game 
 
 ---
 
-## ✨ Why Controller?
+## Why Controller?
 
 - **Zero Mobile Install**: Runs directly inside Safari (iOS) or Chrome (Android) over local Wi-Fi or Windows Mobile Hotspot.
 - **Native Xbox 360 Emulation**: Emulates up to **4 simultaneous `XInput` controllers** (`P1`–`P4`) at the kernel level via ViGEmBus. Swap player slots live from your phone or PC.
@@ -39,12 +39,12 @@ Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game 
 - **Bi-Directional Rumble**: Relays native dual-motor `XInput` force-feedback interrupts from PC games straight back to your phone's haptics.
 - **Instant Layout Customization**: Hold the center logo for `450ms` to drag, resize, and tune thumbstick radii directly on your screen.
 - **Two Editions Included**:
-  - 🖥️ **`Controller.exe` (GUI Edition)**: Monochromatic 60 FPS telemetry dashboard with QR pairing, 1-click driver setup, and per-player oscilloscopes.
-  - ⚡ **`Controller-Terminal.exe` (Terminal Edition)**: Zero-GUI console server built for minimum system overhead and competitive play.
+  - **`Controller.exe` (GUI Edition)**: Monochromatic 60 FPS telemetry dashboard with QR pairing, 1-click driver setup, and per-player oscilloscopes.
+  - **`Controller-Terminal.exe` (Terminal Edition)**: Zero-GUI console server built for minimum system overhead and competitive play.
 
 ---
 
-## 🚀 Quick Start (60 Seconds)
+## Quick Start (60 Seconds)
 
 1. **Launch the Server**: Run `dist\Controller.exe` (GUI) or `dist\Controller-Terminal.exe` (Headless).
 2. **Install the Driver *(One-Time)***: Click **INSTALL DRIVER** in the top bar (or run `scripts\install_driver.bat` as Administrator) to install the ViGEmBus virtual Xbox driver. No reboot needed.
@@ -54,7 +54,7 @@ Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game 
 
 ---
 
-## 📱 Mobile Controls & Gestures
+## Mobile Controls & Gestures
 
 Everything on the mobile web interface is controlled through the **Center Logo** and **Gyro Circle**—keeping the screen clutter-free during gameplay:
 
@@ -67,7 +67,7 @@ Everything on the mobile web interface is controlled through the **Center Logo**
 
 ---
 
-## ⚡ Under the Hood
+## Under the Hood
 
 Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet bursts, and Python GIL stutter. **Controller v1.1.0** solves all four:
 
@@ -76,7 +76,7 @@ Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet burst
 3. **Wi-Fi A-MPDU Burst Coalescing**: Coalesces back-to-back burst frames when button states match, while strictly preserving every button press/release edge in exact sequence.
 4. **1000 Hz Virtual MCU Thread**: Locks Windows kernel timer resolution to `0.5ms` (`NtSetTimerResolution`) with predictive dead-reckoning interpolation to feed `ViGEmBus` at a rock-solid 1000 Hz.
 
-### 📊 Benchmarks
+### Benchmarks
 *Tested under multi-client TLS + 1000 Hz MCU + 60 FPS GUI + simulated Wi-Fi bursts:*
 
 | Metric | v1.1.0 Result | Metric | v1.1.0 Result |
@@ -86,7 +86,7 @@ Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet burst
 | **P95 / P99 RTT** | `6.41 ms` / `10.03 ms` | **Unexpected Drops** | `0` |
 
 <details>
-<summary><b>🔍 View System Architecture & Streaming Pipeline Diagrams</b></summary>
+<summary><b>View System Architecture & Streaming Pipeline Diagrams</b></summary>
 <br>
 
 ### System Architecture
@@ -140,7 +140,7 @@ sequenceDiagram
 
 ---
 
-## 🛠️ Run from Source & CLI
+## Run from Source & CLI
 
 Requires **Python 3.10+** on Windows 10/11:
 
@@ -156,7 +156,7 @@ python terminal_main.py
 ```
 
 <details>
-<summary><b>⌨️ CLI Flags, Terminal Shortcuts & Build Commands</b></summary>
+<summary><b>CLI Flags, Terminal Shortcuts & Build Commands</b></summary>
 <br>
 
 ### Command-Line Flags
@@ -189,7 +189,7 @@ pyinstaller --clean -y Controller.spec
 </details>
 
 <details>
-<summary><b>📂 Repository Structure</b></summary>
+<summary><b>Repository Structure</b></summary>
 <br>
 
 | Path | Description |
@@ -210,7 +210,7 @@ pyinstaller --clean -y Controller.spec
 
 ---
 
-## 🌟 Star History
+## Star History
 
 If **Controller** saved you from buying an extra gamepad (or made couch co-op night happen), consider dropping a ⭐ on the repo!
 
@@ -222,6 +222,6 @@ If **Controller** saved you from buying an extra gamepad (or made couch co-op ni
 
 ---
 
-## 📄 License
+## License
 
 Released under the [**MIT License**](LICENSE). 100% free and open source—forever.
