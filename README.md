@@ -5,10 +5,10 @@
 **Turn any smartphone into a sub-5ms wireless Xbox 360 controller for Windows PC.**  
 *No app store downloads. No cables. No subscriptions. Just scan and play.*
 
-[![GitHub Stars](https://img.shields.io/github/stars/<YOUR_USERNAME>/<YOUR_REPO>?style=for-the-badge&logo=github&color=yellow)](https://github.com/<YOUR_USERNAME>/<YOUR_REPO>/stargazers)
-[![Release](https://img.shields.io/badge/release-v1.1.0-00e5ff?style=for-the-badge)](https://github.com/<YOUR_USERNAME>/<YOUR_REPO>/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/unitynimit/controller?style=for-the-badge&logo=github&color=yellow)](https://github.com/unitynimit/controller/stargazers)
+[![Release](https://img.shields.io/badge/release-v1.1.0-00e5ff?style=for-the-badge)](https://github.com/unitynimit/controller/releases)
 [![Latency](https://img.shields.io/badge/loopback_RTT-4.37ms-00e676?style=for-the-badge)](#benchmarks)
-[![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-0078D6?style=for-the-badge&logo=windows)](https://github.com/<YOUR_USERNAME>/<YOUR_REPO>)
+[![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-0078D6?style=for-the-badge&logo=windows)](https://github.com/unitynimit/controller)
 [![License](https://img.shields.io/badge/license-MIT-ffffff?style=for-the-badge)](LICENSE)
 
 [**Quick Start**](#-quick-start-60-seconds) • [**Features**](#-why-controller) • [**Controls**](#-mobile-controls--gestures) • [**Architecture & Benchmarks**](#-under-the-hood) • [**Run from Source**](#-run-from-source--cli)
@@ -216,8 +216,15 @@ If **Controller** saved you from buying an extra gamepad (or made couch co-op ni
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=<YOUR_USERNAME>/<YOUR_REPO>&type=Date)](https://star-history.com/#<YOUR_USERNAME>/<YOUR_REPO>&Date)
+## Star History
 
+<a href="https://www.star-history.com/?repos=%253CYOUR_USERNAME%253E%2F%253CYOUR_REPO%253E%2Ccontroller%2Fcontroller%2Cunitynimit%2Fcontroller&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=%3CYOUR_USERNAME%3E/%3CYOUR_REPO%3E%2Ccontroller/controller%2Cunitynimit/controller&type=date&legend=top-left" />
+ </picture>
+</a>
 </div>
 
 ---
