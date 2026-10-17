@@ -16,7 +16,7 @@
 <br>
 
 <!-- 🔄 REPLACE THE IMAGE LINK BELOW WITH YOUR ACTUAL CONTROLLER SCREENSHOT OR PHOTO -->
-<img src="./public/image.png" alt="Controller v1.1.0 Preview" width="820" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);" />
+<img src="./public/image.jpg" alt="Controller v1.1.0 Preview" width="820" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);" />
 
 </div>
 
