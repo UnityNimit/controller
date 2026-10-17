@@ -216,9 +216,6 @@ If **Controller** saved you from buying an extra gamepad (or made couch co-op ni
 
 <div align="center">
 
-## Star History
-
-## Star History
 
 <a href="https://www.star-history.com/?repos=unitynimit%2Fcontroller&type=date&legend=top-left">
  <picture>
