@@ -37,13 +37,15 @@ STEP 3: CONNECT YOUR PHONE
 
 STEP 4: CONTROLLER CONTROLS & ERGONOMICS
   - Left & Right Analog Sticks:
-    * 100% Pure continuous 360-degree circular motion with zero cardinal snapping.
-    * Rapid Touch-Off Flick Capture & Mechanical Spring Snapback Curve.
-      Optimized for trick detection in games like Skate and precision steering.
+    * 75px Ergonomic Radius (~16mm natural thumb travel) with 10% deadzone filter.
+    * Cardinal Directional Gating (+-18 deg) along cardinal axes to eliminate accidental diagonal attacks.
+    * Instantaneous Neutral Snap on touch release (zero drift, no artificial spring lag).
+    * Fixed anchor mode ensures rock-solid spatial muscle memory for competitive play.
   - Triggers & Bumpers:
     * LT & RT: Instantaneous hair-trigger actuation (XInput 255) on touch with progressive touch pressure.
     * LB & RB: High-speed shoulder bumpers.
   - Action Buttons: Y, X, B, A diamond layout with center RS click.
+    * 30ms Minimum Hold Frame-Pacing: Micro-taps are automatically latched across at least 1.8 frames at 60 Hz, guaranteeing 0% dropped combos.
   - 6-DoF Gyroscope Motion Steering:
     * Tap the center gyroscope circle anytime to toggle motion steering ON or OFF (default OFF).
     * Includes discrete Kalman filtering and on-screen artificial horizon.
