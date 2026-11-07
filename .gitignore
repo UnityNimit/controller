@@ -43,6 +43,8 @@ certs/*.pem
 
 # Local Runtime Configuration
 .controller_config.json
+.controller_layout.json
+.controller_layout.json*
 
 # Node & Frontend Build
 node_modules/

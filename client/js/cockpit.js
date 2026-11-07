@@ -28,6 +28,25 @@ class GamepadClient {
     this.customizer = new GamepadLayoutCustomizer({
       getGamepadPoint: (x, y) => this.getGamepadPoint(x, y),
       triggerHaptic: (t) => this.haptics.triggerClick(t),
+      onSave: (data) => {
+        if (this.ws && this.connected && this.authenticated) {
+          try {
+            this.ws.send(JSON.stringify({
+              type: "SAVE_LAYOUT",
+              layout: data
+            }));
+          } catch (_) {}
+        }
+      },
+      onReset: () => {
+        if (this.ws && this.connected && this.authenticated) {
+          try {
+            this.ws.send(JSON.stringify({
+              type: "RESET_LAYOUT"
+            }));
+          } catch (_) {}
+        }
+      },
       onModeChange: (isCust) => {
         if (isCust) {
           this.haptics.initAudio();
@@ -1075,10 +1094,31 @@ class GamepadClient {
           localStorage.setItem("controller_preferred_slot", String(this.playerSlot));
           this.syncSettingsDom();
           this._updatePingDisplay(1);
+
+          // Server-Side Persistent Layout Sync (Option 1)
+          if (msg.saved_layout && this.customizer) {
+            this.customizer.applyConfig(msg.saved_layout);
+          } else if (this.customizer && this.customizer.hasCustomConfig()) {
+            // Push existing local layout to host PC for future IP independence
+            try {
+              this.ws.send(JSON.stringify({
+                type: "SAVE_LAYOUT",
+                layout: {
+                  elements: this.customizer.config || {},
+                  stickRadius: this.customizer.stickRadius || { left: 75, right: 75 }
+                }
+              }));
+            } catch (_) {}
+          }
+
           this.sendInputNow(true);
           try {
             this.ws.send(JSON.stringify({ type: "PING", ts: performance.now() }));
           } catch (_) {}
+        } else if (msg.type === "LAYOUT_SYNC") {
+          if (msg.layout && this.customizer) {
+            this.customizer.applyConfig(msg.layout);
+          }
         } else if (msg.type === "SLOT_REASSIGNED") {
           this.playerSlot = msg.player_slot;
           localStorage.setItem("controller_preferred_slot", String(this.playerSlot));

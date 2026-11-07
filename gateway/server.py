@@ -156,12 +156,15 @@ class ControllerGatewayServer:
         port: Optional[int] = None,
         enable_simulator: bool = False,
         force_mock_input: bool = False,
-        bridge: Optional[Any] = None
+        bridge: Optional[Any] = None,
+        layout_file: Optional[Path] = None
     ):
         self.use_ssl = use_ssl
         self.port = port or (settings.network.HTTPS_PORT if use_ssl else settings.network.HTTP_PORT)
         self.enable_simulator = enable_simulator
         self.bridge = bridge
+        self.layout_file: Path = layout_file or (settings.BASE_DIR / ".controller_layout.json")
+        self.saved_layouts: Dict[str, Any] = self._load_persisted_layouts()
         
         # Subsystems
         self.authenticator = ChallengeResponseAuthenticator(
@@ -276,6 +279,103 @@ class ControllerGatewayServer:
 
         return Response(404, "Not Found", Headers([("Content-Type", "text/plain")]), b"Not Found")
 
+    def _load_persisted_layouts(self) -> Dict[str, Any]:
+        """Loads persistent controller layout configurations from disk."""
+        target_path = self.layout_file
+        if not target_path.exists():
+            cwd_path = Path.cwd() / ".controller_layout.json"
+            if cwd_path.exists():
+                target_path = cwd_path
+
+        if target_path.exists():
+            try:
+                with open(target_path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                    if isinstance(data, dict):
+                        return data
+            except Exception as e:
+                logger.warning(f"Could not load persistent layout file {target_path}: {e}")
+        return {"slots": {}}
+
+    def _flush_persisted_layouts(self) -> None:
+        """Atomically writes layout configurations to disk."""
+        target_path = self.layout_file
+        tmp_path = target_path.with_suffix(".tmp")
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(self.saved_layouts, fh, indent=2)
+            tmp_path.replace(target_path)
+        except Exception as e:
+            logger.warning(f"Could not persist layout to {target_path}: {e}")
+
+    def get_saved_layout(self, slot_idx: int) -> Optional[Dict[str, Any]]:
+        """Returns the saved layout profile for the specified player slot, or default profile."""
+        slots = self.saved_layouts.get("slots", {})
+        key = str(slot_idx)
+        if key in slots and isinstance(slots[key], dict):
+            return slots[key]
+        if slot_idx == 0 and "default" in self.saved_layouts and isinstance(self.saved_layouts["default"], dict):
+            return self.saved_layouts["default"]
+        return None
+
+    def save_layout(self, layout_data: Dict[str, Any], slot_idx: int = 0) -> bool:
+        """Validates and persists a customized controller layout to disk atomically."""
+        if not isinstance(layout_data, dict):
+            return False
+
+        validated_elements = {}
+        raw_elements = layout_data.get("elements", {})
+        if isinstance(raw_elements, dict):
+            for elem_id, transform in raw_elements.items():
+                if isinstance(elem_id, str) and isinstance(transform, dict):
+                    try:
+                        dx = max(-3000, min(3000, int(transform.get("dx", 0))))
+                        dy = max(-3000, min(3000, int(transform.get("dy", 0))))
+                        s = max(0.2, min(5.0, float(transform.get("s", 1.0))))
+                        validated_elements[elem_id] = {"dx": dx, "dy": dy, "s": round(s, 2)}
+                    except (ValueError, TypeError):
+                        continue
+
+        validated_radius = {"left": 75, "right": 75}
+        raw_radius = layout_data.get("stickRadius", {})
+        if isinstance(raw_radius, dict):
+            try:
+                l_rad = max(20, min(150, int(raw_radius.get("left", 75))))
+                r_rad = max(20, min(150, int(raw_radius.get("right", 75))))
+                validated_radius = {"left": l_rad, "right": r_rad}
+            except (ValueError, TypeError):
+                pass
+
+        sanitized_profile = {
+            "elements": validated_elements,
+            "stickRadius": validated_radius
+        }
+
+        if "slots" not in self.saved_layouts:
+            self.saved_layouts["slots"] = {}
+
+        slot_key = str(slot_idx)
+        self.saved_layouts["slots"][slot_key] = sanitized_profile
+        if slot_idx == 0:
+            self.saved_layouts["default"] = sanitized_profile
+
+        self._flush_persisted_layouts()
+        logger.info(f"Persisted custom controller layout for Player {slot_idx + 1}")
+        return True
+
+    def reset_layout(self, slot_idx: int = 0) -> bool:
+        """Resets the layout profile for a player slot to factory defaults."""
+        slot_key = str(slot_idx)
+        slots = self.saved_layouts.get("slots", {})
+        if slot_key in slots:
+            del slots[slot_key]
+        if slot_idx == 0 and "default" in self.saved_layouts:
+            del self.saved_layouts["default"]
+
+        self._flush_persisted_layouts()
+        logger.info(f"Reset controller layout for Player {slot_idx + 1}")
+        return True
+
     async def _handle_websocket(self, websocket, *args, **kwargs) -> None:
         """Handles full lifecycle for a connected mobile edge node."""
         client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
@@ -350,11 +450,13 @@ class ControllerGatewayServer:
 
             # Send Auth Success BEFORE adding to active_clients so downlink broadcasts never race with AUTH_SUCCESS
             player_color = settings.clients.PLAYER_COLORS[player_slot % len(settings.clients.PLAYER_COLORS)]
+            saved_layout = self.get_saved_layout(player_slot)
             await websocket.send(json.dumps({
                 "type": "AUTH_SUCCESS",
                 "player_slot": player_slot + 1,  # 1-indexed for display (Player 1..4)
                 "player_color": player_color,
                 "client_id": client_id,
+                "saved_layout": saved_layout,
                 "config": {
                     "max_angle": settings.filters.STEERING_MAX_ANGLE_DEG,
                     "deadband": settings.filters.STEERING_DEADBAND_DEG
@@ -513,6 +615,27 @@ class ControllerGatewayServer:
                         curr_slot = self.input_manager.get_slot(client_id)
                         slot_str = str(curr_slot + 1) if curr_slot is not None else "?"
                         logger.info(f"Calibrated zero steering offset for Player {slot_str} at {angle:.2f}°")
+
+                elif msg_type == "SAVE_LAYOUT":
+                    layout_data = data.get("layout", {})
+                    curr_slot = self.input_manager.get_slot(client_id)
+                    slot_num = curr_slot if curr_slot is not None else player_slot
+                    if self.save_layout(layout_data, slot_num):
+                        await self._send_safe(websocket, json.dumps({
+                            "type": "LAYOUT_SAVED",
+                            "status": "ok",
+                            "player_slot": slot_num + 1
+                        }))
+
+                elif msg_type == "RESET_LAYOUT":
+                    curr_slot = self.input_manager.get_slot(client_id)
+                    slot_num = curr_slot if curr_slot is not None else player_slot
+                    self.reset_layout(slot_num)
+                    await self._send_safe(websocket, json.dumps({
+                        "type": "LAYOUT_RESET",
+                        "status": "ok",
+                        "player_slot": slot_num + 1
+                    }))
 
                 elif msg_type == "PING":
                     await self._send_safe(websocket, json.dumps({"type": "PONG", "ts": data.get("ts", time.time())}))

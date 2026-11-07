@@ -10,6 +10,8 @@ class GamepadLayoutCustomizer {
     this.getGamepadPoint = options.getGamepadPoint || ((x, y) => ({ x, y }));
     this.triggerHaptic = options.triggerHaptic || (() => {});
     this.onModeChange = options.onModeChange || null;
+    this.onSave = options.onSave || null;
+    this.onReset = options.onReset || null;
 
     this.isCustomizing = false;
     this.config = {};
@@ -285,6 +287,9 @@ class GamepadLayoutCustomizer {
   }
 
   closeRadiusPopup() {
+    if (this.activeRadiusPopupStick) {
+      this.saveConfig();
+    }
     this.activeRadiusPopupStick = null;
     const popup = document.getElementById("l1-radius-popup");
     if (popup) popup.classList.remove("active");
@@ -327,6 +332,55 @@ class GamepadLayoutCustomizer {
     this._applyElemTransform(id);
   }
 
+  hasCustomConfig() {
+    if (this.config && Object.keys(this.config).length > 0) {
+      for (const k in this.config) {
+        const item = this.config[k];
+        if (item && (item.dx !== 0 || item.dy !== 0 || (item.s !== 1.0 && item.s !== 1))) {
+          return true;
+        }
+      }
+    }
+    if (this.stickRadius && (this.stickRadius.left !== 75 || this.stickRadius.right !== 75)) {
+      return true;
+    }
+    return false;
+  }
+
+  applyConfig(data) {
+    if (!data || typeof data !== "object") return;
+    try {
+      if (data.elements && typeof data.elements === "object") {
+        this.config = data.elements;
+        Object.keys(this.config).forEach((id) => {
+          this._applyElemTransform(id);
+        });
+      }
+      if (data.stickRadius && typeof data.stickRadius === "object") {
+        this.stickRadius = {
+          left: data.stickRadius.left || 75,
+          right: data.stickRadius.right || 75
+        };
+        const leftRing = document.getElementById("left-stick-radius-preview");
+        if (leftRing) {
+          leftRing.style.width = `${this.stickRadius.left * 2}px`;
+          leftRing.style.height = `${this.stickRadius.left * 2}px`;
+        }
+        const rightRing = document.getElementById("right-stick-radius-preview");
+        if (rightRing) {
+          rightRing.style.width = `${this.stickRadius.right * 2}px`;
+          rightRing.style.height = `${this.stickRadius.right * 2}px`;
+        }
+      }
+      try {
+        localStorage.setItem("controller_layout1_custom_config", JSON.stringify({
+          elements: this.config,
+          stickRadius: this.stickRadius
+        }));
+      } catch (_) {}
+    } catch (_) {}
+  }
+
   saveConfig() {
     try {
       const data = {
@@ -335,6 +389,9 @@ class GamepadLayoutCustomizer {
       };
       localStorage.setItem("controller_layout1_custom_config", JSON.stringify(data));
       this.triggerHaptic("heavy");
+      if (typeof this.onSave === "function") {
+        this.onSave(data);
+      }
     } catch (_) {}
   }
 
@@ -343,28 +400,7 @@ class GamepadLayoutCustomizer {
       const raw = localStorage.getItem("controller_layout1_custom_config");
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.elements) {
-          this.config = data.elements;
-          Object.keys(this.config).forEach((id) => {
-            this._applyElemTransform(id);
-          });
-        }
-        if (data.stickRadius) {
-          this.stickRadius = {
-            left: data.stickRadius.left || 75,
-            right: data.stickRadius.right || 75
-          };
-          const leftRing = document.getElementById("left-stick-radius-preview");
-          if (leftRing) {
-            leftRing.style.width = `${this.stickRadius.left * 2}px`;
-            leftRing.style.height = `${this.stickRadius.left * 2}px`;
-          }
-          const rightRing = document.getElementById("right-stick-radius-preview");
-          if (rightRing) {
-            rightRing.style.width = `${this.stickRadius.right * 2}px`;
-            rightRing.style.height = `${this.stickRadius.right * 2}px`;
-          }
-        }
+        this.applyConfig(data);
       }
     } catch (_) {}
   }
@@ -395,6 +431,9 @@ class GamepadLayoutCustomizer {
 
       this.closeRadiusPopup();
       this.triggerHaptic("heavy");
+      if (typeof this.onReset === "function") {
+        this.onReset();
+      }
     } catch (_) {}
   }
 }

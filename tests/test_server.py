@@ -878,3 +878,113 @@ def test_anti_bufferbloat_and_low_latency_burst_resilience():
 
     asyncio.run(_burst_test())
 
+
+
+def test_server_layout_persistence_and_sync(tmp_path):
+    """
+    Verifies Option 1: Host PC Server-Side Layout Sync.
+    Ensures that when a client customizes buttons/radiuses, the layout is persisted
+    to disk and automatically restored to any reconnecting client regardless of IP changes.
+    """
+    test_layout_file = tmp_path / "test_layouts.json"
+
+    async def _test():
+        test_port = 8105
+        server = ControllerGatewayServer(
+            use_ssl=False,
+            port=test_port,
+            enable_simulator=False,
+            force_mock_input=True,
+            layout_file=test_layout_file
+        )
+        await server.start()
+
+        try:
+            url = f"ws://127.0.0.1:{test_port}/ws"
+
+            # 1. Connect Client 1 (Initial connection - no layout on server yet)
+            async with websockets.connect(url) as ws1:
+                ch = json.loads(await ws1.recv())
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, f"{nonce}:{ts}".encode("utf-8"), hashlib.sha256).hexdigest()
+                await ws1.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "phone_alpha",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig,
+                    "preferred_slot": 1
+                }))
+                auth1 = json.loads(await ws1.recv())
+                assert auth1["type"] == "AUTH_SUCCESS"
+                assert auth1.get("saved_layout") is None
+
+                # Client 1 saves a customized layout
+                custom_layout = {
+                    "elements": {
+                        "btn-a": {"dx": 25, "dy": -40, "s": 1.2},
+                        "btn-b": {"dx": 30, "dy": -45, "s": 1.1}
+                    },
+                    "stickRadius": {"left": 85, "right": 90}
+                }
+                await ws1.send(json.dumps({
+                    "type": "SAVE_LAYOUT",
+                    "layout": custom_layout
+                }))
+                ack = json.loads(await ws1.recv())
+                assert ack["type"] == "LAYOUT_SAVED"
+                assert ack["status"] == "ok"
+
+            # 2. Verify file persisted on disk
+            assert test_layout_file.exists()
+
+            # 3. Connect Client 2 (Simulating reconnect on new IP / new session)
+            async with websockets.connect(url) as ws2:
+                ch = json.loads(await ws2.recv())
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, f"{nonce}:{ts}".encode("utf-8"), hashlib.sha256).hexdigest()
+                await ws2.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "phone_beta_new_ip",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig,
+                    "preferred_slot": 1
+                }))
+                auth2 = json.loads(await ws2.recv())
+                assert auth2["type"] == "AUTH_SUCCESS"
+                saved = auth2.get("saved_layout")
+                assert saved is not None
+                assert saved["stickRadius"]["left"] == 85
+                assert saved["stickRadius"]["right"] == 90
+                assert saved["elements"]["btn-a"]["dx"] == 25
+                assert saved["elements"]["btn-a"]["dy"] == -40
+                assert saved["elements"]["btn-a"]["s"] == 1.2
+
+                # Now reset layout
+                await ws2.send(json.dumps({"type": "RESET_LAYOUT"}))
+                reset_ack = json.loads(await ws2.recv())
+                assert reset_ack["type"] == "LAYOUT_RESET"
+                assert reset_ack["status"] == "ok"
+
+            # 4. Connect Client 3 (Verify reset took effect)
+            async with websockets.connect(url) as ws3:
+                ch = json.loads(await ws3.recv())
+                nonce, ts = ch["nonce"], ch["timestamp"]
+                sig = hmac.new(settings.security.HMAC_SHARED_SECRET, f"{nonce}:{ts}".encode("utf-8"), hashlib.sha256).hexdigest()
+                await ws3.send(json.dumps({
+                    "type": "AUTH_RESPONSE",
+                    "client_id": "phone_gamma",
+                    "nonce": nonce,
+                    "timestamp": ts,
+                    "signature": sig,
+                    "preferred_slot": 1
+                }))
+                auth3 = json.loads(await ws3.recv())
+                assert auth3["type"] == "AUTH_SUCCESS"
+                assert auth3.get("saved_layout") is None
+
+        finally:
+            await server.stop()
+
+    asyncio.run(_test())
