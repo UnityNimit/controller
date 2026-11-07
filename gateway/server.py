@@ -374,20 +374,11 @@ class ControllerGatewayServer:
             last_qos_t = 0.0
             qos_count = 0
             sync_burst_count = 0
-            ws_msgs = getattr(websocket, "messages", None)
             async for message in websocket:
                 sync_burst_count += 1
-                if (sync_burst_count & 7) == 0:
+                if (sync_burst_count & 15) == 0:
                     await asyncio.sleep(0)
                 if isinstance(message, bytes):
-                    if (
-                        ws_msgs
-                        and len(message) == 24
-                        and isinstance(ws_msgs[0], bytes)
-                        and len(ws_msgs[0]) == 24
-                        and ws_msgs[0][18:20] == message[18:20]
-                    ):
-                        continue
                     data = decode_binary_packet(message)
                     if data is None:
                         continue

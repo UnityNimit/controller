@@ -117,6 +117,10 @@ class McuConfig:
     ENABLE_PREDICTIVE_INTERPOLATION: bool = True
     # Dynamic latency compensation factor (extrapolates forward by RTT/2 * factor to cancel Wi-Fi lag)
     LATENCY_COMPENSATION_FACTOR: float = 1.0
+    # Minimum button hold duration in seconds to guarantee 60 Hz / 120 Hz game engine detection
+    MIN_BUTTON_HOLD_SEC: float = 0.030
+    # Enable LSB dither for dwPacketNumber incrementing (False by default for competitive zero stick drift)
+    ENABLE_LSB_DITHER: bool = False
 
 
 # Unified Settings Instance

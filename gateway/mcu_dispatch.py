@@ -32,6 +32,13 @@ class SlotStateLatch:
     has_active_client: bool = False
     last_packet_time: float = 0.0
     sequence_num: int = 0
+    # Minimum hold timestamp per button to guarantee detection by 60 Hz / 120 Hz game polling loops
+    button_hold_until: Dict[str, float] = field(default_factory=dict)
+    buttons_pending_release: set = field(default_factory=set)
+    throttle_hold_until: float = 0.0
+    throttle_pending_release: bool = False
+    brake_hold_until: float = 0.0
+    brake_pending_release: bool = False
 
     def reset(self) -> None:
         self.stick_x = 0
@@ -44,6 +51,12 @@ class SlotStateLatch:
         self.has_active_client = False
         self.last_packet_time = 0.0
         self.sequence_num = 0
+        self.button_hold_until.clear()
+        self.buttons_pending_release.clear()
+        self.throttle_hold_until = 0.0
+        self.throttle_pending_release = False
+        self.brake_hold_until = 0.0
+        self.brake_pending_release = False
 
 
 class VirtualMcuDispatcher:
@@ -58,13 +71,21 @@ class VirtualMcuDispatcher:
         controllers: List[Any],
         target_hz: float = 1000.0,
         enable_hybrid_spinlock: bool = True,
-        max_slots: int = 4
+        max_slots: int = 4,
+        min_button_hold_sec: Optional[float] = None,
+        enable_lsb_dither: Optional[bool] = None
     ):
         self.controllers = controllers
         self.max_slots = max_slots
         self.target_hz = float(target_hz)
         self.enable_hybrid_spinlock = bool(enable_hybrid_spinlock)
         self.interval = 1.0 / max(100.0, self.target_hz)
+
+        # Minimum guaranteed button hold duration (default 30ms = 1.8 frames @ 60 FPS)
+        from config import settings
+        self.min_button_hold_sec = min_button_hold_sec if min_button_hold_sec is not None else getattr(settings.mcu, "MIN_BUTTON_HOLD_SEC", 0.030)
+        # LSB dither: False by default to guarantee zero stick drift in competitive games
+        self.enable_lsb_dither = enable_lsb_dither if enable_lsb_dither is not None else getattr(settings.mcu, "ENABLE_LSB_DITHER", False)
 
         # Per-slot atomic state latches
         self.latches: List[SlotStateLatch] = [SlotStateLatch() for _ in range(max_slots)]
@@ -166,12 +187,48 @@ class VirtualMcuDispatcher:
                 latch.right_stick_x = int(control_state["right_stick_x"])
             if "right_stick_y" in control_state:
                 latch.right_stick_y = int(control_state["right_stick_y"])
+
+            t_perf = time.perf_counter()
             if "throttle" in control_state:
-                latch.throttle = int(control_state["throttle"])
+                raw_th = int(control_state["throttle"])
+                if raw_th > 50:
+                    latch.throttle = raw_th
+                    latch.throttle_hold_until = t_perf + self.min_button_hold_sec
+                    latch.throttle_pending_release = False
+                else:
+                    if latch.throttle > 50 and t_perf < latch.throttle_hold_until:
+                        latch.throttle_pending_release = True
+                    else:
+                        latch.throttle = raw_th
+                        latch.throttle_pending_release = False
+
             if "brake" in control_state:
-                latch.brake = int(control_state["brake"])
+                raw_br = int(control_state["brake"])
+                if raw_br > 50:
+                    latch.brake = raw_br
+                    latch.brake_hold_until = t_perf + self.min_button_hold_sec
+                    latch.brake_pending_release = False
+                else:
+                    if latch.brake > 50 and t_perf < latch.brake_hold_until:
+                        latch.brake_pending_release = True
+                    else:
+                        latch.brake = raw_br
+                        latch.brake_pending_release = False
+
             if "buttons" in control_state:
-                latch.buttons.update(control_state["buttons"])
+                incoming_buttons = control_state["buttons"]
+                for btn_name, pressed in incoming_buttons.items():
+                    if pressed:
+                        latch.buttons[btn_name] = True
+                        latch.button_hold_until[btn_name] = t_perf + self.min_button_hold_sec
+                        latch.buttons_pending_release.discard(btn_name)
+                    else:
+                        hold_until = latch.button_hold_until.get(btn_name, 0.0)
+                        if latch.buttons.get(btn_name, False) and t_perf < hold_until:
+                            latch.buttons_pending_release.add(btn_name)
+                        else:
+                            latch.buttons[btn_name] = False
+                            latch.buttons_pending_release.discard(btn_name)
 
         # Pillar 2: Feed Predictive Micro-Interpolator
         if self.enable_predictive_interpolation and self.interpolator is not None:
@@ -246,6 +303,21 @@ class VirtualMcuDispatcher:
                     if not latch.has_active_client and not is_mock:
                         continue
 
+                    # Flush pending button releases once minimum frame hold time has elapsed
+                    if latch.buttons_pending_release:
+                        for btn_name in list(latch.buttons_pending_release):
+                            if t_start >= latch.button_hold_until.get(btn_name, 0.0):
+                                latch.buttons[btn_name] = False
+                                latch.buttons_pending_release.discard(btn_name)
+
+                    if latch.throttle_pending_release and t_start >= latch.throttle_hold_until:
+                        latch.throttle = 0
+                        latch.throttle_pending_release = False
+
+                    if latch.brake_pending_release and t_start >= latch.brake_hold_until:
+                        latch.brake = 0
+                        latch.brake_pending_release = False
+
                     # Pillar 2: Sample smooth micro-interpolated and latency-compensated analog coordinates
                     interp = None
                     if self.enable_predictive_interpolation and self.interpolator is not None:
@@ -256,9 +328,9 @@ class VirtualMcuDispatcher:
                         sy = interp["stick_y"]
                         rx = interp["right_stick_x"]
                         ry = interp["right_stick_y"]
-                        th = interp["throttle"]
-                        br = interp["brake"]
-                        btns = interp["buttons"]
+                        th = latch.throttle if latch.throttle_pending_release else interp["throttle"]
+                        br = latch.brake if latch.brake_pending_release else interp["brake"]
+                        btns = latch.buttons
                     else:
                         sx = latch.stick_x
                         sy = latch.stick_y
@@ -268,9 +340,8 @@ class VirtualMcuDispatcher:
                         br = latch.brake
                         btns = latch.buttons
 
-                    # 1000 Hz Sub-Perceptual Active State Dither:
-                    # Windows XInput only increments dwPacketNumber when controller state bytes change.
-                    if latch.has_active_client and not is_mock:
+                    # 1000 Hz Sub-Perceptual Active State Dither (Disabled by default for zero stick drift)
+                    if self.enable_lsb_dither and latch.has_active_client and not is_mock:
                         if sx == 0 and sy == 0:
                             sx = 1 if (self.total_dispatches & 1) else 0
 

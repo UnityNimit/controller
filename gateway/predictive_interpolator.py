@@ -81,6 +81,14 @@ class AxisPredictor:
         self.last_update_time = t
         self.is_active = (abs(val) > self.deadband)
 
+        # Immediate neutral zero-snap: prevents residual velocity from over-extrapolating drift
+        if not self.is_active:
+            self.x = [0.0, 0.0, 0.0]
+            self.history.append((t, 0.0, 0.0))
+            if len(self.history) > self.max_history:
+                self.history.pop(0)
+            return
+
         # 1. State-Space Kalman Prediction:
         # State transition F = [[1, dt, 0.5*dt^2], [0, 1, dt], [0, 0, alpha]]
         alpha = 0.95
@@ -154,8 +162,8 @@ class AxisPredictor:
         if not self.history:
             return 0
 
-        # Center deadband check: if raw position is in deadband and velocity is near-zero, snap to zero
-        if abs(self.x[0]) <= self.deadband and abs(self.x[1]) < 800.0:
+        # Center deadband check: if current state is within deadband, snap to true zero (zero drift)
+        if abs(self.x[0]) <= self.deadband:
             return 0
 
         target_t = query_time + max(0.0, min(0.025, lookahead_sec))

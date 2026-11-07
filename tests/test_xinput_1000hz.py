@@ -41,8 +41,8 @@ def test_mcu_1000hz_sustained_frequency_and_micro_jitter():
 def test_mcu_dither_state_generation_for_xinput():
     """
     Verifies that the MCU dispatch loop produces alternating LSB values
-    during neutral active sessions (0 <-> 1), ensuring Windows XInput increments
-    dwPacketNumber on every millisecond report.
+    during neutral active sessions (0 <-> 1) when dither is explicitly enabled,
+    ensuring Windows XInput increments dwPacketNumber on every millisecond report.
     """
     class TrackingGamepad(MockGamepad):
         def __init__(self):
@@ -55,7 +55,7 @@ def test_mcu_dither_state_generation_for_xinput():
             super().set_stick(x, y)
 
     ctrl = TrackingGamepad()
-    mcu = VirtualMcuDispatcher(controllers=[ctrl], target_hz=1000.0, max_slots=1)
+    mcu = VirtualMcuDispatcher(controllers=[ctrl], target_hz=1000.0, max_slots=1, enable_lsb_dither=True)
     mcu.start()
 
     try:
@@ -70,6 +70,34 @@ def test_mcu_dither_state_generation_for_xinput():
         has_zero = 0 in reports
         has_one = 1 in reports
         assert has_zero and has_one, f"Expected 0 and 1 dither in reports: {reports}"
+
+    finally:
+        mcu.stop()
+
+
+def test_mcu_zero_drift_pure_neutral_when_dither_disabled():
+    """Verifies that by default (dither disabled), neutral inputs stay strictly at 0 with zero drift."""
+    class TrackingGamepad(MockGamepad):
+        def __init__(self):
+            super().__init__(0)
+            self.is_mock = False
+            self.recorded_steering = []
+
+        def set_stick(self, x: int, y: int = 0):
+            self.recorded_steering.append(x)
+            super().set_stick(x, y)
+
+    ctrl = TrackingGamepad()
+    mcu = VirtualMcuDispatcher(controllers=[ctrl], target_hz=1000.0, max_slots=1)
+    mcu.start()
+
+    try:
+        mcu.update_slot_input(0, {"stick_x": 0, "stick_y": 0, "buttons": {}})
+        time.sleep(0.03)
+
+        reports = ctrl.recorded_steering[-20:]
+        assert len(reports) >= 15
+        assert all(r == 0 for r in reports), f"Expected strictly 0 (no drift), got {reports}"
 
     finally:
         mcu.stop()

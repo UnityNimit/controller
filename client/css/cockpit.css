@@ -1046,8 +1046,8 @@ body.forced-landscape-portrait #controller-app {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 10;
-  width: 80px;
-  height: 80px;
+  width: 150px;
+  height: 150px;
 }
 
 .customizing-mode .stick-radius-preview {

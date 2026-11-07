@@ -210,7 +210,7 @@ class GamepadClient {
   set isCustomizingLayout1(v) { if (this.customizer) this.customizer.isCustomizing = v; }
   get customLayout1Config() { return this.customizer ? this.customizer.config : {}; }
   set customLayout1Config(v) { if (this.customizer) this.customizer.config = v; }
-  get customStickRadius() { return this.customizer ? this.customizer.stickRadius : { left: 40, right: 40 }; }
+  get customStickRadius() { return this.customizer ? this.customizer.stickRadius : { left: 75, right: 75 }; }
   set customStickRadius(v) { if (this.customizer) this.customizer.stickRadius = v; }
   get activeRadiusPopupStick() { return this.customizer ? this.customizer.activeRadiusPopupStick : null; }
 
@@ -1425,37 +1425,13 @@ class GamepadClient {
         }, 190);
       }
 
-      if (mag > 1200) {
-        // High-speed physical spring-return simulation (decays in ~20ms across 3 steps for game flick detection)
-        this.sendInputNow(true);
-        setTimeout(() => {
-          if (!this.leftStickActive) {
-            this.stickX = Math.round(startX * 0.50);
-            this.stickY = Math.round(startY * 0.50);
-            this.sendInputNow(true);
-          }
-        }, 6);
-        setTimeout(() => {
-          if (!this.leftStickActive) {
-            this.stickX = Math.round(startX * 0.15);
-            this.stickY = Math.round(startY * 0.15);
-            this.sendInputNow(true);
-          }
-        }, 14);
-        setTimeout(() => {
-          if (!this.leftStickActive) {
-            this.stickX = 0;
-            this.stickY = 0;
-            this.sendInputNow(true);
-            if (leftPuck1) leftPuck1.style.transition = "none";
-          }
-        }, 22);
-      } else {
-        this.stickX = 0;
-        this.stickY = 0;
-        this.sendInputNow(true);
-        if (leftPuck1) leftPuck1.style.transition = "none";
+      this.stickX = 0;
+      this.stickY = 0;
+      if (leftPuck1) {
+        leftPuck1.style.transition = "none";
+        leftPuck1.style.transform = "translate(0px, 0px)";
       }
+      this.sendInputNow(true);
     };
 
     const bindLeftStickAnchor = (anchor) => {
@@ -1505,37 +1481,13 @@ class GamepadClient {
         }, 190);
       }
 
-      if (mag > 1200) {
-        // High-speed physical spring-return simulation (decays in ~20ms across 3 steps for game flick detection)
-        this.sendInputNow(true);
-        setTimeout(() => {
-          if (!this.rightStickActive) {
-            this.rightStickX = Math.round(startX * 0.50);
-            this.rightStickY = Math.round(startY * 0.50);
-            this.sendInputNow(true);
-          }
-        }, 6);
-        setTimeout(() => {
-          if (!this.rightStickActive) {
-            this.rightStickX = Math.round(startX * 0.15);
-            this.rightStickY = Math.round(startY * 0.15);
-            this.sendInputNow(true);
-          }
-        }, 14);
-        setTimeout(() => {
-          if (!this.rightStickActive) {
-            this.rightStickX = 0;
-            this.rightStickY = 0;
-            this.sendInputNow(true);
-            if (rightPuck1) rightPuck1.style.transition = "none";
-          }
-        }, 22);
-      } else {
-        this.rightStickX = 0;
-        this.rightStickY = 0;
-        this.sendInputNow(true);
-        if (rightPuck1) rightPuck1.style.transition = "none";
+      this.rightStickX = 0;
+      this.rightStickY = 0;
+      if (rightPuck1) {
+        rightPuck1.style.transition = "none";
+        rightPuck1.style.transform = "translate(0px, 0px)";
       }
+      this.sendInputNow(true);
     };
 
     const bindRightStickAnchor = (anchor) => {
@@ -1615,7 +1567,8 @@ class GamepadClient {
       const currentKey = this.directBtnPointers.get(e.pointerId) || null;
       const pressure = (e.pressure && e.pressure > 0.05) ? e.pressure : (e.force && e.force > 0.05 ? e.force : 1.0);
 
-      if (currentKey !== newKey) {
+      // Only switch button if thumb explicitly glides into another valid button
+      if (newKey !== null && newKey !== currentKey) {
         if (currentKey !== null) {
           this.directBtnPointers.delete(e.pointerId);
           const isStillHeld = Array.from(this.directBtnPointers.values()).includes(currentKey);
@@ -1623,16 +1576,14 @@ class GamepadClient {
             this._setButtonState(currentKey, false);
           }
         }
-        if (newKey !== null) {
-          this.directBtnPointers.set(e.pointerId, newKey);
-          const isSoleHolder = Array.from(this.directBtnPointers.values()).filter(k => k === newKey).length === 1;
-          if (isSoleHolder) {
-            this._setButtonState(newKey, true, pressure);
-            this.haptics.triggerClick(newKey.startsWith("DPAD") ? "dpad" : (newKey === "LT" || newKey === "RT" ? "heavy" : "normal"));
-          }
+        this.directBtnPointers.set(e.pointerId, newKey);
+        const isSoleHolder = Array.from(this.directBtnPointers.values()).filter(k => k === newKey).length === 1;
+        if (isSoleHolder) {
+          this._setButtonState(newKey, true, pressure);
+          this.haptics.triggerClick(newKey.startsWith("DPAD") ? "dpad" : (newKey === "LT" || newKey === "RT" ? "heavy" : "normal"));
         }
         this.sendInputNow(true);
-      } else if (currentKey === "LT" || currentKey === "RT") {
+      } else if (currentKey !== null && (currentKey === "LT" || currentKey === "RT")) {
         this._setButtonState(currentKey, true, pressure);
         this.sendInputNow();
       }
@@ -1753,20 +1704,7 @@ class GamepadClient {
     const pt = this.getGamepadPoint(clientX, clientY);
 
     if (leftAnchor1) {
-      if (!this._leftStickRestCenter) {
-        this._leftStickRestCenter = this.getGamepadCenter(leftAnchor1);
-      }
-      this.leftStickOrigin = { x: pt.x, y: pt.y };
-
-      const scale = this.layout1Scale || 1.0;
-      const deltaX = (pt.x - this._leftStickRestCenter.x) / scale;
-      const deltaY = (pt.y - this._leftStickRestCenter.y) / scale;
-
-      const cfg = (this.customizer && typeof this.customizer._getElemConfig === "function")
-        ? this.customizer._getElemConfig("left-stick-anchor")
-        : { dx: 0, dy: 0, s: 1.0 };
-      const s = cfg.s || 1.0;
-      leftAnchor1.style.transform = `translate(calc(var(--l1-dx, ${cfg.dx}px) + ${deltaX}px), calc(var(--l1-dy, ${cfg.dy}px) + ${deltaY}px)) scale(${s})`;
+      this.leftStickOrigin = this.getGamepadCenter(leftAnchor1);
     } else {
       this.leftStickOrigin = null;
     }
@@ -1793,20 +1731,7 @@ class GamepadClient {
     const pt = this.getGamepadPoint(clientX, clientY);
 
     if (rightAnchor1) {
-      if (!this._rightStickRestCenter) {
-        this._rightStickRestCenter = this.getGamepadCenter(rightAnchor1);
-      }
-      this.rightStickOrigin = { x: pt.x, y: pt.y };
-
-      const scale = this.layout1Scale || 1.0;
-      const deltaX = (pt.x - this._rightStickRestCenter.x) / scale;
-      const deltaY = (pt.y - this._rightStickRestCenter.y) / scale;
-
-      const cfg = (this.customizer && typeof this.customizer._getElemConfig === "function")
-        ? this.customizer._getElemConfig("right-stick-anchor")
-        : { dx: 0, dy: 0, s: 1.0 };
-      const s = cfg.s || 1.0;
-      rightAnchor1.style.transform = `translate(calc(var(--l1-dx, ${cfg.dx}px) + ${deltaX}px), calc(var(--l1-dy, ${cfg.dy}px) + ${deltaY}px)) scale(${s})`;
+      this.rightStickOrigin = this.getGamepadCenter(rightAnchor1);
     } else {
       this.rightStickOrigin = null;
     }
@@ -1825,7 +1750,7 @@ class GamepadClient {
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
     const scale = this.layout1Scale || 1.0;
-    const baseRadius = (this.customStickRadius ? (this.customStickRadius.left || 40) : 40);
+    const baseRadius = (this.customStickRadius ? (this.customStickRadius.left || 75) : 75);
     const maxRadius = baseRadius * scale;
     const dist = Math.hypot(dx, dy);
 
@@ -1841,7 +1766,7 @@ class GamepadClient {
       puckEl.style.transform = `translate(${localDx}px, ${localDy}px)`;
     }
 
-    const deadzone = 0.05;
+    const deadzone = 0.10;
     const normDist = Math.min(1.0, dist / maxRadius);
 
     if (normDist < deadzone) {
@@ -1852,8 +1777,28 @@ class GamepadClient {
       const cartY = -dy;
       const cartX = dx;
       const angleRad = Math.atan2(cartY, cartX);
-      this.stickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
-      this.stickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
+      const angleDeg = ((angleRad * 180 / Math.PI) + 360) % 360;
+      const GATE_DEG = 18;
+
+      let gatedX = Math.cos(angleRad) * linearScale;
+      let gatedY = Math.sin(angleRad) * linearScale;
+
+      if (angleDeg <= GATE_DEG || angleDeg >= (360 - GATE_DEG)) {
+        gatedX = linearScale;
+        gatedY = 0;
+      } else if (Math.abs(angleDeg - 90) <= GATE_DEG) {
+        gatedX = 0;
+        gatedY = linearScale;
+      } else if (Math.abs(angleDeg - 180) <= GATE_DEG) {
+        gatedX = -linearScale;
+        gatedY = 0;
+      } else if (Math.abs(angleDeg - 270) <= GATE_DEG) {
+        gatedX = 0;
+        gatedY = -linearScale;
+      }
+
+      this.stickX = Math.round(Math.max(-1.0, Math.min(1.0, gatedX)) * 32767);
+      this.stickY = Math.round(Math.max(-1.0, Math.min(1.0, gatedY)) * 32767);
     }
     this.sendInputNow();
   }
@@ -1868,7 +1813,7 @@ class GamepadClient {
     const dx = pt.x - center.x;
     const dy = pt.y - center.y;
     const scale = this.layout1Scale || 1.0;
-    const baseRadius = (this.customStickRadius ? (this.customStickRadius.right || 40) : 40);
+    const baseRadius = (this.customStickRadius ? (this.customStickRadius.right || 75) : 75);
     const maxRadius = baseRadius * scale;
     const dist = Math.hypot(dx, dy);
 
@@ -1884,7 +1829,7 @@ class GamepadClient {
       puckEl.style.transform = `translate(${localDx}px, ${localDy}px)`;
     }
 
-    const deadzone = 0.05;
+    const deadzone = 0.10;
     const normDist = Math.min(1.0, dist / maxRadius);
 
     if (normDist < deadzone) {
@@ -1895,8 +1840,28 @@ class GamepadClient {
       const cartY = -dy;
       const cartX = dx;
       const angleRad = Math.atan2(cartY, cartX);
-      this.rightStickX = Math.round(Math.cos(angleRad) * linearScale * 32767);
-      this.rightStickY = Math.round(Math.sin(angleRad) * linearScale * 32767);
+      const angleDeg = ((angleRad * 180 / Math.PI) + 360) % 360;
+      const GATE_DEG = 18;
+
+      let gatedX = Math.cos(angleRad) * linearScale;
+      let gatedY = Math.sin(angleRad) * linearScale;
+
+      if (angleDeg <= GATE_DEG || angleDeg >= (360 - GATE_DEG)) {
+        gatedX = linearScale;
+        gatedY = 0;
+      } else if (Math.abs(angleDeg - 90) <= GATE_DEG) {
+        gatedX = 0;
+        gatedY = linearScale;
+      } else if (Math.abs(angleDeg - 180) <= GATE_DEG) {
+        gatedX = -linearScale;
+        gatedY = 0;
+      } else if (Math.abs(angleDeg - 270) <= GATE_DEG) {
+        gatedX = 0;
+        gatedY = -linearScale;
+      }
+
+      this.rightStickX = Math.round(Math.max(-1.0, Math.min(1.0, gatedX)) * 32767);
+      this.rightStickY = Math.round(Math.max(-1.0, Math.min(1.0, gatedY)) * 32767);
     }
     this.sendInputNow();
   }

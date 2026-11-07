@@ -84,6 +84,35 @@ def test_mcu_button_hold_continuity():
     assert mock_ctrl.buttons.get("A") is False
 
 
+def test_mcu_minimum_button_hold_frame_pacing():
+    """
+    Verifies that a microsecond button pulse (e.g. 1ms tap before release)
+    is latched for at least 30ms (1.8 frames @ 60 Hz), guaranteeing that 60 Hz
+    game polling loops cannot miss rapid combo taps.
+    """
+    mock_ctrl = MockGamepad(0)
+    # Configure 30ms minimum hold
+    mcu = VirtualMcuDispatcher(controllers=[mock_ctrl], target_hz=1000.0, max_slots=1, min_button_hold_sec=0.030)
+    mcu.start()
+
+    try:
+        # Micro-tap: Press and immediately release within 1ms
+        mcu.update_slot_input(0, {"buttons": {"X": True}})
+        time.sleep(0.002)
+        mcu.update_slot_input(0, {"buttons": {"X": False}})
+
+        # At 12ms: Button MUST STILL BE HELD TRUE (preventing 60 Hz poll miss)
+        time.sleep(0.010)
+        assert mock_ctrl.buttons.get("X") is True, "Button released prematurely before 30ms frame-pacing window!"
+
+        # At 35ms (> 30ms): Button must be cleanly released
+        time.sleep(0.025)
+        assert mock_ctrl.buttons.get("X") is False, "Button failed to release after 30ms hold window expired!"
+
+    finally:
+        mcu.stop()
+
+
 def test_input_manager_mcu_integration():
     """Verify InputManager integrates seamlessly with VirtualMcuDispatcher."""
     mgr = InputManager(force_mock=True, max_players=2)

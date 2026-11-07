@@ -13,7 +13,7 @@ class GamepadLayoutCustomizer {
 
     this.isCustomizing = false;
     this.config = {};
-    this.stickRadius = { left: 40, right: 40 };
+    this.stickRadius = { left: 75, right: 75 };
     this.activeRadiusPopupStick = null;
 
     this._activeDrag = null;
@@ -248,12 +248,12 @@ class GamepadLayoutCustomizer {
     const slider = document.getElementById("l1-radius-slider");
     if (!popup || !anchorEl) return;
 
-    const currentR = this.stickRadius[stick] || 40;
+    const currentR = this.stickRadius[stick] || 75;
     if (title) title.textContent = `${stick.toUpperCase()} STICK DRAG RADIUS`;
     if (valLabel) valLabel.textContent = `${currentR}px`;
     if (slider) {
-      slider.min = "20";
-      slider.max = "85";
+      slider.min = "30";
+      slider.max = "110";
       slider.value = currentR;
     }
 
@@ -331,7 +331,7 @@ class GamepadLayoutCustomizer {
     try {
       const data = {
         elements: this.config || {},
-        stickRadius: this.stickRadius || { left: 40, right: 40 }
+        stickRadius: this.stickRadius || { left: 75, right: 75 }
       };
       localStorage.setItem("controller_layout1_custom_config", JSON.stringify(data));
       this.triggerHaptic("heavy");
@@ -351,8 +351,8 @@ class GamepadLayoutCustomizer {
         }
         if (data.stickRadius) {
           this.stickRadius = {
-            left: data.stickRadius.left || 40,
-            right: data.stickRadius.right || 40
+            left: data.stickRadius.left || 75,
+            right: data.stickRadius.right || 75
           };
           const leftRing = document.getElementById("left-stick-radius-preview");
           if (leftRing) {
@@ -373,7 +373,7 @@ class GamepadLayoutCustomizer {
     try {
       localStorage.removeItem("controller_layout1_custom_config");
       this.config = {};
-      this.stickRadius = { left: 40, right: 40 };
+      this.stickRadius = { left: 75, right: 75 };
 
       document.querySelectorAll("[data-custom-id]").forEach((el) => {
         el.style.transform = "";
@@ -384,13 +384,13 @@ class GamepadLayoutCustomizer {
 
       const leftRing = document.getElementById("left-stick-radius-preview");
       if (leftRing) {
-        leftRing.style.width = "80px";
-        leftRing.style.height = "80px";
+        leftRing.style.width = "150px";
+        leftRing.style.height = "150px";
       }
       const rightRing = document.getElementById("right-stick-radius-preview");
       if (rightRing) {
-        rightRing.style.width = "80px";
-        rightRing.style.height = "80px";
+        rightRing.style.width = "150px";
+        rightRing.style.height = "150px";
       }
 
       this.closeRadiusPopup();
