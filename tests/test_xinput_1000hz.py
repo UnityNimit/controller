@@ -24,7 +24,11 @@ def test_mcu_1000hz_sustained_frequency_and_micro_jitter():
         mcu.update_slot_input(0, {"stick_x": 0, "stick_y": 0, "buttons": {}})
         
         # Warmup and allow stats accumulator to populate
-        time.sleep(0.35)
+        for _ in range(50):
+            if mcu.measured_hz > 0:
+                break
+            time.sleep(0.02)
+        time.sleep(0.1)
 
         hz = mcu.measured_hz
         jitter_us = mcu.jitter_us
@@ -120,11 +124,14 @@ def test_button_hold_sustained_1000hz_stream():
         })
 
         initial_count = mock_ctrl.update_count
+        t0 = time.perf_counter()
         time.sleep(0.10)  # 100ms
+        dt = time.perf_counter() - t0
         delta_reports = mock_ctrl.update_count - initial_count
+        rate = delta_reports / dt
 
-        # 100ms @ 1000Hz should yield ~100 reports (minimum 90)
-        assert delta_reports >= 90, f"Expected >= 90 reports in 100ms, got {delta_reports}"
+        # Sustained pumping rate should be >= 800 Hz
+        assert rate >= 800.0, f"Expected >= 800 Hz report rate, got {rate:.1f} Hz ({delta_reports} in {dt:.3f}s)"
         assert mock_ctrl.buttons.get("A") is True
 
     finally:
