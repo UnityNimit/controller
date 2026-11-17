@@ -131,7 +131,7 @@ def test_mobile_client_assets_and_integrity():
         assert resp_index.status_code == 200
         index_text = resp_index.body.decode("utf-8")
         assert "<title>Controller</title>" in index_text
-        assert "VERSION 1.1.0" in index_text
+        assert "VERSION 2.0.0" in index_text
         assert "logo.png" in index_text
         assert "controller-app" in index_text
         assert "mod-gyro" in index_text

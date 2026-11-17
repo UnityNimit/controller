@@ -220,7 +220,7 @@ def should_show_terms_on_startup() -> bool:
 
 def save_terms_preference(dont_show: bool) -> None:
     """Persists the user's terms acceptance and startup modal preference across multiple fallback locations."""
-    data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "1.1.0"}
+    data = {"accepted_terms": True, "dont_show_terms": dont_show, "version": "2.0.0"}
     content = json.dumps(data, indent=2)
     for config_path in _get_config_candidate_paths():
         try:

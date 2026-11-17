@@ -136,7 +136,7 @@ def test_logo_and_terms_dialog_helpers(tmp_path, monkeypatch):
 
     import json
     cfg = json.loads((tmp_path / ".controller_config.json").read_text(encoding="utf-8"))
-    assert cfg.get("version") == "1.1.0"
+    assert cfg.get("version") == "2.0.0"
 
     # Save preference dont_show=False
     save_terms_preference(dont_show=False)
@@ -144,7 +144,7 @@ def test_logo_and_terms_dialog_helpers(tmp_path, monkeypatch):
 
     from config import settings
     assert settings.APP_NAME == "Controller"
-    assert settings.APP_VERSION == "1.1.0"
+    assert settings.APP_VERSION == "2.0.0"
 
 
 def test_independent_per_slot_dsp_and_rumble():

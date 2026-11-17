@@ -9,7 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 APP_NAME: str = "Controller"
-APP_VERSION: str = "1.1.0"
+APP_VERSION: str = "2.0.0"
 
 if getattr(sys, 'frozen', False):
     BUNDLE_DIR = Path(sys._MEIPASS)

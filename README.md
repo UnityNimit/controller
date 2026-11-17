@@ -6,7 +6,7 @@
 *No app store downloads. No cables. No subscriptions. Just scan and play.*
 
 [![GitHub Stars](https://img.shields.io/github/stars/unitynimit/controller?style=for-the-badge&logo=github&color=yellow)](https://github.com/unitynimit/controller/stargazers)
-[![Release](https://img.shields.io/badge/release-v1.1.0-00e5ff?style=for-the-badge)](https://github.com/unitynimit/controller/releases)
+[![Release](https://img.shields.io/badge/release-v2.0.0-00e5ff?style=for-the-badge)](https://github.com/unitynimit/controller/releases)
 [![Latency](https://img.shields.io/badge/loopback_RTT-4.37ms-00e676?style=for-the-badge)](#benchmarks)
 [![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-0078D6?style=for-the-badge&logo=windows)](https://github.com/unitynimit/controller)
 [![License](https://img.shields.io/badge/license-MIT-ffffff?style=for-the-badge)](LICENSE)
@@ -15,8 +15,8 @@
 
 <br>
 
-<!-- 🔄 REPLACE THE IMAGE LINK BELOW WITH YOUR ACTUAL CONTROLLER SCREENSHOT OR PHOTO -->
-<img src="./public/image.jpg" alt="Controller v1.1.0 Preview" width="820" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);" />
+<!-- REPLACE THE IMAGE LINK BELOW WITH YOUR ACTUAL CONTROLLER SCREENSHOT OR PHOTO -->
+<img src="./public/image.jpg" alt="Controller v2.0.0 Preview" width="820" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);" />
 
 </div>
 
@@ -69,7 +69,7 @@ Everything on the mobile web interface is controlled through the **Center Logo**
 
 ## Under the Hood
 
-Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet bursts, and Python GIL stutter. **Controller v1.1.0** solves all four:
+Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet bursts, and Python GIL stutter. **Controller v2.0.0** solves all four:
 
 1. **24-Byte `BINARY v2` Protocol**: Packs sequence numbers, timestamps, four 16-bit stick axes (`LX, LY, RX, RY`), two 8-bit triggers (`LT, RT`), a 16-bit button bitmask, 16-bit gyro angle, flags, and RTT telemetry into 24 bytes—cutting payload size by **>88%** vs. JSON.
 2. **Anti-Bufferbloat Adaptive Pacing**: Streams at up to **400 Hz (`2.5ms`)** during active movement and throttles down to **40 Hz (`25ms`)** when idle. Gated at `bufferedAmount <= 256` bytes so stale frames never queue in the phone's Wi-Fi chip.
@@ -79,7 +79,7 @@ Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet burst
 ### Benchmarks
 *Tested under multi-client TLS + 1000 Hz MCU + 60 FPS GUI + simulated Wi-Fi bursts:*
 
-| Metric | v1.1.0 Result | Metric | v1.1.0 Result |
+| Metric | v2.0.0 Result | Metric | v2.0.0 Result |
 | :--- | :---: | :--- | :---: |
 | **Median (P50) RTT** | `4.37 ms` | **Max Spike (Wi-Fi Burst)** | `11.70 ms` |
 | **Mean RTT** | `4.52 ms` | **Spikes > 30 ms** | `0` |
@@ -103,7 +103,7 @@ flowchart LR
         Downlink["XInput Rumble & Slot Sync"]
     end
 
-    subgraph PC["Windows Host PC (Controller v1.1.0)"]
+    subgraph PC["Windows Host PC (Controller v2.0.0)"]
         Server["AsyncIO WSS Gateway"] --> Firewall["HMAC-SHA256 Auth & O(1) Firewall"]
         Firewall --> DSP["Kalman/EMA DSP & Interpolator"]
         DSP --> MCU["1000 Hz Virtual MCU"]
@@ -162,7 +162,7 @@ python terminal_main.py
 ### Command-Line Flags
 | Flag | Description |
 | :--- | :--- |
-| `-v`, `--version` | Display version (`Controller v1.1.0`) and exit |
+| `-v`, `--version` | Display version (`Controller v2.0.0`) and exit |
 | `-h`, `--help` | Display command-line help and interactive shortcuts |
 | `--headless`, `--no-gui` | Run `Controller.exe` in headless terminal mode |
 | `--port <int>` | Specify a custom WebSocket/HTTPS port (default: `8443`) |
@@ -180,7 +180,7 @@ python terminal_main.py
 
 ### Test & Build Standalone Executables
 ```powershell
-# Run the 80-test automated unit, stress, and security suite
+# Run the 83-test automated unit, stress, and security suite
 python -m pytest tests/ -v
 
 # Build Controller.exe and Controller-Terminal.exe via PyInstaller
@@ -195,7 +195,7 @@ pyinstaller --clean -y Controller.spec
 | Path | Description |
 | :--- | :--- |
 | `main.py` / `terminal_main.py` | Entrypoints for GUI (`Controller.exe`) and Terminal (`Controller-Terminal.exe`) editions |
-| `config/settings.py` | Version (`1.1.0`), ports, DSP filter constants, and security parameters |
+| `config/settings.py` | Version (`2.0.0`), ports, DSP filter constants, and security parameters |
 | `gateway/server.py` | AsyncIO HTTPS/WSS server, burst coalescer, slot router, and static asset handler |
 | `gateway/input_manager.py` | 4-player ViGEmBus Xbox 360 manager and `SendInput` keyboard fallback |
 | `gateway/mcu_dispatch.py` | 1000 Hz Virtual MCU hardware dispatch engine with micro-interpolation |
@@ -205,14 +205,14 @@ pyinstaller --clean -y Controller.spec
 | `gateway/security.py` | HMAC-SHA256 challenge-response authenticator and `O(1)` deque anomaly firewall |
 | `gui/dashboard.py` & `state_bridge.py` | Monochromatic 60 FPS CustomTkinter telemetry dashboard and thread-safe state bridge |
 | `client/` | Zero-dependency mobile web gamepad (`cockpit.js`, `digitizer.js`, `gyro.js`, `haptics.js`, `layout_customizer.js`) |
-| `tests/` | 80 automated unit, stress, security, and end-to-end integration tests |
+| `tests/` | 83 automated unit, stress, security, and end-to-end integration tests |
 </details>
 
 ---
 
 ## Star History
 
-If **Controller** saved you from buying an extra gamepad (or made couch co-op night happen), consider dropping a ⭐ on the repo!
+If **Controller** saved you from buying an extra gamepad (or made couch co-op night happen), consider dropping a star on the repo!
 
 <div align="center">
 

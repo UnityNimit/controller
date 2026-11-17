@@ -1,5 +1,5 @@
 ========================================================================
- CONTROLLER v1.1.0 - MOBILE-TO-PC WIRELESS GAMEPAD
+ CONTROLLER v2.0.0 - MOBILE-TO-PC WIRELESS GAMEPAD
 ========================================================================
 
 TWO EDITIONS INCLUDED:

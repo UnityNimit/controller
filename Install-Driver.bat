@@ -1,7 +1,7 @@
 @echo off
-title Controller v1.1.0 - Virtual Gamepad Driver Setup
+title Controller v2.0.0 - Virtual Gamepad Driver Setup
 echo =====================================================================
-echo  Controller v1.1.0 - Windows Virtual Gamepad Driver Setup
+echo  Controller v2.0.0 - Windows Virtual Gamepad Driver Setup
 echo =====================================================================
 echo.
 echo Installing ViGEmBus driver... Please accept the Windows Administrator prompt.
