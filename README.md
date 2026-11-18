@@ -2,8 +2,8 @@
 
 # Controller
 
-**Turn any smartphone into a sub-5ms wireless Xbox 360 controller for Windows PC.**  
-*No app store downloads. No cables. No subscriptions. Just scan and play.*
+**Use any smartphone as a sub-5ms wireless Xbox 360 controller on your Windows PC.**  
+*Zero app downloads, zero cables, zero subscriptions—simply scan and start playing.*
 
 [![GitHub Stars](https://img.shields.io/github/stars/unitynimit/controller?style=for-the-badge&logo=github&color=yellow)](https://github.com/unitynimit/controller/stargazers)
 [![Release](https://img.shields.io/badge/release-v2.0.0-00e5ff?style=for-the-badge)](https://github.com/unitynimit/controller/releases)
@@ -24,9 +24,9 @@
 
 ## The Idea
 
-Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game with friends, only to realize you are short on gamepads? Every smartphone already carries a high-refresh multi-touch digitizer, a 6-axis gyroscope, and a haptic motor in your pocket.
+Ever been ready to dive into a racing sim, platformer, or 4-player couch co-op session with friends, only to come up short on gamepads? The smartphone already in your pocket packs a high-refresh multi-touch screen, a 6-axis gyroscope, and a built-in haptic motor.
 
-**Controller** bridges your phone's browser directly to the Windows kernel (`ViGEmBus`). Launch the server on your PC, scan the QR code with your phone camera, and Windows immediately recognizes your phone as a native **Xbox 360 (`XInput`) controller**—compatible out of the box with Steam, Epic Games, Xbox Game Pass, and standalone titles.
+**Controller** connects your mobile browser straight to the Windows kernel (`ViGEmBus`). Start the server on your PC, point your phone's camera at the QR code, and Windows instantly detects it as a native **Xbox 360 (`XInput`) controller**—ready to play across Steam, Epic Games, Xbox Game Pass, and standalone games with no extra setup.
 
 ---
 
@@ -56,7 +56,7 @@ Ever wanted to jump into a racing sim, platformer, or 4-player couch co-op game 
 
 ## Mobile Controls & Gestures
 
-Everything on the mobile web interface is controlled through the **Center Logo** and **Gyro Circle**—keeping the screen clutter-free during gameplay:
+All controls on the mobile web interface run through the **Center Logo** and **Gyro Circle**, keeping your screen clean and unobstructed while you play:
 
 | Gesture | Action |
 | :--- | :--- |
@@ -69,7 +69,7 @@ Everything on the mobile web interface is controlled through the **Center Logo**
 
 ## Under the Hood
 
-Wireless browser controllers usually suffer from Wi-Fi bufferbloat, packet bursts, and Python GIL stutter. **Controller v2.0.0** solves all four:
+Browser-based wireless gamepads are often held back by Wi-Fi bufferbloat, packet bursts, and Python GIL stutter. **Controller v2.0.0** addresses these challenges with four core techniques:
 
 1. **24-Byte `BINARY v2` Protocol**: Packs sequence numbers, timestamps, four 16-bit stick axes (`LX, LY, RX, RY`), two 8-bit triggers (`LT, RT`), a 16-bit button bitmask, 16-bit gyro angle, flags, and RTT telemetry into 24 bytes—cutting payload size by **>88%** vs. JSON.
 2. **Anti-Bufferbloat Adaptive Pacing**: Streams at up to **400 Hz (`2.5ms`)** during active movement and throttles down to **40 Hz (`25ms`)** when idle. Gated at `bufferedAmount <= 256` bytes so stale frames never queue in the phone's Wi-Fi chip.
@@ -212,7 +212,7 @@ pyinstaller --clean -y Controller.spec
 
 ## Star History
 
-If **Controller** saved you from buying an extra gamepad (or made couch co-op night happen), consider dropping a star on the repo!
+If **Controller** saved you from picking up another gamepad (or rescued couch co-op night), feel free to leave a star on the repository!
 
 <div align="center">
 
@@ -229,4 +229,4 @@ If **Controller** saved you from buying an extra gamepad (or made couch co-op ni
 
 ## License
 
-Released under the [**MIT License**](LICENSE). 100% free and open source—forever.
+Distributed under the [**MIT License**](LICENSE). Completely free and open source—always.
