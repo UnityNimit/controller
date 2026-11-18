@@ -205,6 +205,58 @@ def test_independent_per_slot_dsp_and_rumble():
     assert snap["slots"][1]["large_motor_rumble"] == 32768
 
 
+def test_oscilloscope_continuous_sweep_and_no_freeze():
+    import customtkinter as ctk
+    from gui.dashboard import MinimalOscilloscope, PlayerDeckCard
+
+    root = ctk.CTk()
+    root.withdraw()
+    try:
+        osc = MinimalOscilloscope(root, "Ping / Latency", unit="ms", height=40, min_val=0.0, max_val=30.0)
+        assert "default" in osc.head_dots
+
+        # Simulate 10 time points
+        now = time.perf_counter()
+        data = [(now - 0.5 + i * 0.05, 12.0) for i in range(10)]
+        osc.update_trace("default", data, current_val=12.0, display_text="12.0 ms")
+
+        pts = osc.canvas.coords(osc.trace_lines["default"])
+        assert len(pts) >= 4
+        head = osc.canvas.coords(osc.head_dots["default"])
+        assert head[0] > 0
+        assert osc.lbl_value.cget("text") == "12.0 ms"
+
+        # Verify PlayerDeckCard updates oscilloscopes without getting stuck
+        card = PlayerDeckCard(root, slot_index=0, player_color="#00f5ff")
+        bridge = TelemetryBridge()
+        bridge.register_client(0, "p1", "127.0.0.1")
+
+        # Record stationary packets beyond 120 (1.5 seconds)
+        for i in range(130):
+            bridge.record_input(
+                slot_index=0,
+                client_id="p1",
+                control_state={"stick_x": 0, "stick_y": 0, "right_stick_x": 0, "right_stick_y": 0, "throttle": 0, "brake": 0, "buttons": {}},
+                client_rtt=5.0
+            )
+
+        snap = bridge.get_snapshot()
+        card.update_state(snap["slots"][0])
+
+        # Latency coords exist and update
+        lat_pts = card.osc_latency.canvas.coords(card.osc_latency.trace_lines["latency"])
+        assert len(lat_pts) >= 4
+        assert card.osc_latency.lbl_value.cget("text") == "5.0 ms"
+        assert card.osc_stick.lbl_value.cget("text") == "0, 0"
+
+        # Clear traces
+        osc.clear_traces()
+        head_cleared = osc.canvas.coords(osc.head_dots["default"])
+        assert head_cleared[0] < 0
+    finally:
+        root.destroy()
+
+
 def test_setup_wizard_dialog_and_dark_title_bar():
     from gui.dashboard import SetupWizardDialog, TermsDialog, enable_dark_title_bar
 

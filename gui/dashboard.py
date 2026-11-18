@@ -1331,15 +1331,24 @@ class MinimalOscilloscope(ctk.CTkFrame):
         self.canvas.tag_raise("trace_line")
 
     def _init_traces(self) -> None:
+        self.head_dots: Dict[str, int] = {}
         for cfg in self.trace_configs:
             name = cfg["name"]
             color = cfg.get("color", COLOR_WHITE)
             line_id = self.canvas.create_line(0, self.canvas_height // 2, 0, self.canvas_height // 2, fill=color, width=2, tags="trace_line")
             self.trace_lines[name] = line_id
+            dot_id = self.canvas.create_oval(-10, -10, -10, -10, fill=color, outline="#ffffff", width=1, tags="trace_head")
+            self.head_dots[name] = dot_id
 
-    def update_trace(self, name: str, data_points: List[Tuple[float, float]], current_val: Optional[float] = None) -> None:
+    def update_trace(
+        self,
+        name: str,
+        data_points: Any,
+        current_val: Optional[float] = None,
+        display_text: Optional[str] = None
+    ) -> None:
         line_id = self.trace_lines.get(name)
-        if not line_id or len(data_points) < 2:
+        if not line_id or not data_points or len(data_points) < 2:
             return
 
         cfg = next((c for c in self.trace_configs if c["name"] == name), None)
@@ -1347,31 +1356,65 @@ class MinimalOscilloscope(ctk.CTkFrame):
         max_v = cfg.get("max", self.max_val) if cfg else self.max_val
         v_span = (max_v - min_v) if max_v > min_v else 1.0
 
-        w = self.canvas_width
-        h = self.canvas_height
+        w = max(30, self.canvas_width)
+        h = max(16, self.canvas_height)
+
+        now = time.perf_counter()
+        window_sec = 1.2
+
+        pts_list = list(data_points)
+        count = len(pts_list)
+        if count < 2:
+            return
+
+        # Continuous smooth time-rolling projection:
+        # Maps time age to x coordinate so waveforms roll fluidly across the screen at 60 FPS
+        latest_t = pts_list[-1][0]
+        ref_time = max(now, latest_t)
 
         pts = []
-        count = len(data_points)
-        x_step = w / (count - 1) if count > 1 else w
+        for t, val in pts_list:
+            age = ref_time - t
+            if age < 0.0:
+                age = 0.0
+            norm_x = 1.0 - (age / window_sec)
+            if norm_x < 0.0:
+                norm_x = 0.0
+            elif norm_x > 1.0:
+                norm_x = 1.0
+            x = int(norm_x * w)
 
-        for idx, (_, val) in enumerate(data_points):
-            x = int(idx * x_step)
-            norm = (val - min_v) / v_span
-            norm = max(0.0, min(1.0, norm))
-            y = int(h - (norm * (h - 6)) - 3)
+            norm_y = (val - min_v) / v_span
+            norm_y = max(0.0, min(1.0, norm_y))
+            y = int(h - (norm_y * (h - 6)) - 3)
             pts.extend([x, y])
+
+        # Smooth baseline anchor for left margin before initial buffer fill
+        if pts and pts[0] > 0:
+            pts = [0, pts[1]] + pts
 
         if len(pts) >= 4:
             self.canvas.coords(line_id, *pts)
+            dot_id = self.head_dots.get(name)
+            if dot_id:
+                hx = pts[-2]
+                hy = pts[-1]
+                self.canvas.coords(dot_id, hx - 2, hy - 2, hx + 2, hy + 2)
+                self.canvas.tag_raise("trace_head")
 
-        if current_val is not None:
+        if display_text is not None:
+            new_text = display_text
+        elif current_val is not None:
             new_text = f"{current_val:.1f} {self.unit}"
         else:
             new_text = f"-- {self.unit}"
 
         if new_text != self._last_readout:
             self._last_readout = new_text
-            self.lbl_value.configure(text=new_text, text_color=COLOR_TEXT_PRIMARY if current_val is not None else COLOR_TEXT_MUTED)
+            self.lbl_value.configure(
+                text=new_text,
+                text_color=COLOR_TEXT_PRIMARY if (display_text or current_val is not None) else COLOR_TEXT_MUTED
+            )
 
     def clear_traces(self) -> None:
         w = max(30, self.canvas_width)
@@ -1379,15 +1422,17 @@ class MinimalOscilloscope(ctk.CTkFrame):
         for cfg in self.trace_configs:
             name = cfg["name"]
             line_id = self.trace_lines.get(name)
-            if not line_id:
-                continue
-            min_v = cfg.get("min", self.min_val)
-            max_v = cfg.get("max", self.max_val)
-            v_span = (max_v - min_v) if max_v > min_v else 1.0
-            norm = (0.0 - min_v) / v_span
-            norm = max(0.0, min(1.0, norm))
-            y = int(h - (norm * (h - 6)) - 3)
-            self.canvas.coords(line_id, 0, y, w, y)
+            if line_id:
+                min_v = cfg.get("min", self.min_val)
+                max_v = cfg.get("max", self.max_val)
+                v_span = (max_v - min_v) if max_v > min_v else 1.0
+                norm = (0.0 - min_v) / v_span
+                norm = max(0.0, min(1.0, norm))
+                y = int(h - (norm * (h - 6)) - 3)
+                self.canvas.coords(line_id, 0, y, w, y)
+            dot_id = self.head_dots.get(name)
+            if dot_id:
+                self.canvas.coords(dot_id, -10, -10, -10, -10)
         new_text = f"-- {self.unit}"
         if new_text != self._last_readout:
             self._last_readout = new_text
@@ -1866,12 +1911,8 @@ class PlayerDeckCard(ctk.CTkFrame):
             self.prog_haptic_r.set(norm_r)
             self.lbl_haptic_r.configure(text=f"R-MTR {pct_r}%", text_color=COLOR_WHITE if pct_r > 0 else COLOR_TEXT_MUTED)
 
-        # Fast-path skip if no new uplink packet arrived since last GUI frame
-        if pkts == self._last_pkts:
-            return
+        # Update uplink packet counter and metadata string
         self._last_pkts = pkts
-        self._osc_tick += 1
-
         ip = slot_data.get("client_ip", "127.0.0.1")
         rtt = slot_data.get("rtt_ms", 0.0)
         hz = slot_data.get("hz", 0.0)
@@ -1880,49 +1921,67 @@ class PlayerDeckCard(ctk.CTkFrame):
             self._last_meta_str = meta_str
             self.lbl_meta.configure(text=meta_str, text_color=COLOR_TEXT_PRIMARY)
 
-        self.radar_ls.set_position(slot_data.get("stick_x", 0), slot_data.get("stick_y", 0))
-        self.radar_rs.set_position(slot_data.get("right_stick_x", 0), slot_data.get("right_stick_y", 0))
-        self.triggers.update_shoulders(
-            slot_data.get("buttons", {}),
-            slot_data.get("throttle", 0),
-            slot_data.get("brake", 0)
-        )
-        self.buttons.set_states(slot_data.get("buttons", {}))
+        # Real-time Gamepad Visualizers
+        sx = slot_data.get("stick_x", 0)
+        sy = slot_data.get("stick_y", 0)
+        rx = slot_data.get("right_stick_x", 0)
+        ry = slot_data.get("right_stick_y", 0)
+        th = slot_data.get("throttle", 0)
+        br = slot_data.get("brake", 0)
+        buttons = slot_data.get("buttons", {})
 
-        # Throttle heavy Tkinter canvas polyline redraws to 30 FPS to keep GIL free
-        if (self._osc_tick & 1) != 0 and self._osc_tick > 2:
-            return
+        self.radar_ls.set_position(sx, sy)
+        self.radar_rs.set_position(rx, ry)
+        self.triggers.update_shoulders(buttons, th, br)
+        self.buttons.set_states(buttons)
 
+        # 4 Dedicated Real-Time Continuous Rolling Oscilloscopes (Fluid 60 FPS Sweep)
         lat_wave = slot_data.get("latency_wave", [])
         if lat_wave:
-            self.osc_latency.update_trace("latency", lat_wave, current_val=slot_data.get("rtt_ms"))
+            self.osc_latency.update_trace("latency", lat_wave, current_val=rtt, display_text=f"{rtt:.1f} ms")
 
         sx_wave = slot_data.get("stick_x_wave", [])
         sy_wave = slot_data.get("stick_y_wave", [])
         rx_wave = slot_data.get("right_stick_x_wave", [])
         ry_wave = slot_data.get("right_stick_y_wave", [])
+
+        if abs(sx) > 500 or abs(sy) > 500:
+            stick_txt = f"LS {sx//1000}k,{sy//1000}k"
+        elif abs(rx) > 500 or abs(ry) > 500:
+            stick_txt = f"RS {rx//1000}k,{ry//1000}k"
+        else:
+            stick_txt = "0, 0"
+
         if sx_wave:
-            self.osc_stick.update_trace("stick_x", sx_wave)
+            self.osc_stick.update_trace("stick_x", sx_wave, display_text=stick_txt)
         if sy_wave:
-            self.osc_stick.update_trace("stick_y", sy_wave)
+            self.osc_stick.update_trace("stick_y", sy_wave, display_text=stick_txt)
         if rx_wave:
-            self.osc_stick.update_trace("right_stick_x", rx_wave)
+            self.osc_stick.update_trace("right_stick_x", rx_wave, display_text=stick_txt)
         if ry_wave:
-            self.osc_stick.update_trace("right_stick_y", ry_wave)
+            self.osc_stick.update_trace("right_stick_y", ry_wave, display_text=stick_txt)
 
         th_wave = slot_data.get("throttle_wave", [])
         br_wave = slot_data.get("brake_wave", [])
+        th_pct = int((th / 255.0) * 100)
+        br_pct = int((br / 255.0) * 100)
+        trig_txt = f"LT {br_pct}% RT {th_pct}%" if (th_pct > 0 or br_pct > 0) else "0% / 0%"
+
         if br_wave:
-            self.osc_triggers.update_trace("brake", br_wave)
+            self.osc_triggers.update_trace("brake", br_wave, display_text=trig_txt)
         if th_wave:
-            self.osc_triggers.update_trace("throttle", th_wave)
+            self.osc_triggers.update_trace("throttle", th_wave, display_text=trig_txt)
 
         raw_wave = slot_data.get("raw_angle_wave", [])
         kalman_wave = slot_data.get("kalman_angle_wave", [])
+        raw_angle = slot_data.get("steering_angle", 0.0)
+        kalman_angle = slot_data.get("filtered_angle", 0.0)
+        dsp_txt = f"{kalman_angle:+.1f}° ({raw_angle:+.1f}°)" if (abs(kalman_angle) > 0.05 or abs(raw_angle) > 0.05) else "0.0°"
+
         if raw_wave:
-            self.osc_kalman.update_trace("raw_imu", raw_wave)
+            self.osc_kalman.update_trace("raw_imu", raw_wave, display_text=dsp_txt)
         if kalman_wave:
-            self.osc_kalman.update_trace("kalman", kalman_wave, current_val=slot_data.get("filtered_angle"))
+            self.osc_kalman.update_trace("kalman", kalman_wave, current_val=kalman_angle, display_text=dsp_txt)
 
 
 class ControllerDashboard(ctk.CTk):
