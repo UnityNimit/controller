@@ -1367,31 +1367,33 @@ class MinimalOscilloscope(ctk.CTkFrame):
         if count < 2:
             return
 
-        # Continuous smooth time-rolling projection:
+        # Continuous smooth time-rolling projection with reverse window pruning:
         # Maps time age to x coordinate so waveforms roll fluidly across the screen at 60 FPS
         latest_t = pts_list[-1][0]
         ref_time = max(now, latest_t)
 
-        pts = []
-        for t, val in pts_list:
+        raw_pts = []
+        for t, val in reversed(pts_list):
             age = ref_time - t
             if age < 0.0:
                 age = 0.0
             norm_x = 1.0 - (age / window_sec)
-            if norm_x < 0.0:
-                norm_x = 0.0
-            elif norm_x > 1.0:
-                norm_x = 1.0
-            x = int(norm_x * w)
-
             norm_y = (val - min_v) / v_span
             norm_y = max(0.0, min(1.0, norm_y))
             y = int(h - (norm_y * (h - 6)) - 3)
-            pts.extend([x, y])
+            if norm_x <= 0.0:
+                raw_pts.append((0, y))
+                break
+            x = int(min(1.0, norm_x) * w)
+            raw_pts.append((x, y))
 
-        # Smooth baseline anchor for left margin before initial buffer fill
-        if pts and pts[0] > 0:
-            pts = [0, pts[1]] + pts
+        raw_pts.reverse()
+        if raw_pts and raw_pts[0][0] > 0:
+            raw_pts.insert(0, (0, raw_pts[0][1]))
+
+        pts = []
+        for px, py in raw_pts:
+            pts.extend([px, py])
 
         if len(pts) >= 4:
             self.canvas.coords(line_id, *pts)
