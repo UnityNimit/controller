@@ -71,3 +71,9 @@ desktop.ini
 .idea/
 .neuron/
 *.swp
+
+# Profiling and Cache
+*.prof
+*.sqlite3
+release_metadata.json
+.cache/
