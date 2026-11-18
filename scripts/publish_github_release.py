@@ -17,8 +17,19 @@ TITLE = "Controller v2.0.0: Tournament-Grade Precision & Zero Stick Drift"
 
 def get_token() -> str:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token and len(sys.argv) > 1 and sys.argv[1].startswith("ghp_"):
+    if not token and len(sys.argv) > 1 and sys.argv[1].startswith(("ghp_", "gho_")):
         token = sys.argv[1]
+    if not token:
+        try:
+            import subprocess
+            p = subprocess.Popen(['git', 'credential', 'fill'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            out, _ = p.communicate('protocol=https\nhost=github.com\n\n')
+            for line in out.splitlines():
+                if line.startswith('password='):
+                    token = line.split('=', 1)[1]
+                    break
+        except Exception:
+            pass
     if not token:
         print("\n[!] GITHUB_TOKEN not found in environment.")
         print("Usage:")
@@ -88,6 +99,18 @@ def main():
         if not asset_path.exists():
             print(f"[WARN] File {asset_path} does not exist, skipping.")
             continue
+
+        # Delete existing asset with same name if present
+        existing_assets = rel_data.get("assets", [])
+        for ex in existing_assets:
+            if ex.get("name") == asset_name:
+                del_url = f"https://api.github.com/repos/{REPO}/releases/assets/{ex['id']}"
+                del_req = urllib.request.Request(del_url, headers=headers, method="DELETE")
+                try:
+                    with urllib.request.urlopen(del_req) as del_resp:
+                        print(f"  [INFO] Replaced existing asset {asset_name} (ID: {ex['id']})")
+                except Exception as del_err:
+                    print(f"  [WARN] Could not delete old {asset_name}: {del_err}")
 
         file_size = os.path.getsize(asset_path)
         print(f"Uploading {asset_name} ({file_size / (1024*1024):.1f} MB)...")
